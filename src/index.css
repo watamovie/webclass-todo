@@ -15,6 +15,7 @@
   --surface-hover: #f1f5f9;
   --border:        #e5e7eb;
   --text:          #1f2937;
+  --text-secondary:#1f2937;
   --primary:       #3b82f6;
   --primary-dim:   #2563eb;
   --radius:        0.75rem;
@@ -29,15 +30,51 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:            #0f172a;
-    --surface:       #1e293b;
-    --surface-hover: #273549;
-    --border:        #374151;
-    --text:          #f1f5f9;
+    --bg:            #121212;
+    --surface:       #1A1A1A;
+    --surface-hover: #2A2A2A;
+    --border:        #333333;
+    --text:          #E0E0E0;
+    --text-secondary:#9E9E9E;
     --primary:       #3b82f6;
     --primary-dim:   #60a5fa;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  }
+  input[type="date"],
+  input[type="number"],
+  input[type="text"],
+  select {
+    background: #2A2A2A;
+    color: #FFFFFF;
+  }
+
+  button,
+  .button,
+  .number-spinner button {
+    background: #2D2D2D;
+    color: #FFFFFF;
+  }
+  button:hover,
+  .button:hover,
+  .number-spinner button:hover {
+    background: #3C3C3C;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  button:focus-visible {
+    outline-color: #888888;
+  }
+
+  .table-container tr:hover {
+    background: #2A2A2A;
+  }
+
+  .mobile-container > div {
+    background: #1A1A1A !important;
+    border-color: #333333 !important;
+    color: #E0E0E0;
   }
 }
 
@@ -380,7 +417,7 @@ button.primary:hover {
   text-align: center;
   margin-top: 1.25rem;
   font-size: 0.95rem;
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 /* Improve focus ring for accessibility */
