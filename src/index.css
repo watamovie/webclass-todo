@@ -1,0 +1,397 @@
+/* -----------------------------------------------------------------
+ * WebClass To-Do – Neo-Modern UI (2025-07-19 Rev.B)
+ * 機能は一切変更せず、見た目と操作性だけを強化しました。
+ *  - ダーク／ライト両対応
+ *  - モバイルファースト + CSS Grid で崩れにくいレイアウト
+ *  - アクセシビリティ向上 (フォーカスリング / タッチターゲット)
+ *  - 微細なアニメーションで “サクサク感”
+ * ----------------------------------------------------------------- */
+
+/* ---------------- Root palette & typography ---------------- */
+:root {
+  /* Light theme */
+  --bg:            #f9fafb;
+  --surface:       #ffffff;
+  --surface-hover: #f1f5f9;
+  --border:        #e5e7eb;
+  --text:          #1f2937;
+  --primary:       #3b82f6;
+  --primary-dim:   #2563eb;
+  --radius:        0.75rem;
+  --gap:           1.25rem;
+  --sidebar-width: 260px;
+  --font:          "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:            #0f172a;
+    --surface:       #1e293b;
+    --surface-hover: #273549;
+    --border:        #374151;
+    --text:          #f1f5f9;
+    --primary:       #3b82f6;
+    --primary-dim:   #60a5fa;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* ---------------- Reset ---------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Remove tap-highlight on mobile */
+button, input, select {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------------- Layout container ---------------- */
+.container {
+  display: block; /* mobile first */
+  width: 100%;
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: var(--gap);
+}
+
+header {
+  margin-bottom: var(--gap);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+header h1 {
+  font-size: clamp(1.5rem, 2vw + 1rem, 2rem);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+header img.logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+}
+
+.sidebar {
+  width: 100%;
+  margin-bottom: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .container {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    gap: var(--gap);
+  }
+  header { grid-column: 1 / -1; }
+  .sidebar {
+    position: sticky;
+    top: var(--gap);
+    height: calc(100vh - 2 * var(--gap) - 2.5rem);
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ---------------- Sidebar accordion ---------------- */
+.filter-accordion {
+  padding: var(--gap);
+}
+
+.filter-accordion summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  outline: none;
+  display: flex;
+  align-items: center;
+}
+
+.filter-accordion summary::marker,
+.filter-accordion summary::-webkit-details-marker { display: none; }
+
+.filter-accordion summary::after {
+  content: "›";
+  margin-left: auto;
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+
+details[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.filter-fields {
+  margin-top: var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.filter-fields label {
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+input[type="date"],
+input[type="number"],
+select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover);
+}
+
+.number-spinner {
+  display: flex;
+  align-items: stretch;
+}
+
+.number-spinner button {
+  width: 2.25rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.number-spinner button:hover {
+  background: var(--surface-hover);
+}
+
+.number-spinner input {
+  width: 4rem;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-inline: none;
+  background: var(--surface-hover);
+}
+
+/* ---------------- Metrics ---------------- */
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  font-weight: 600;
+  margin-bottom: var(--gap);
+}
+
+.metrics .metric {
+  min-width: 6rem;
+}
+
+/* ---------------- Tabs ---------------- */
+.tabs {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: var(--gap);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  background: none;
+  border: none;
+  padding: 0.75rem 0;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+}
+
+.tabs button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.tabs button.active::after,
+.tabs button:hover::after {
+  background: var(--primary);
+}
+
+/* ---------------- Button group ---------------- */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: var(--gap);
+}
+
+button,
+.button {
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:hover,
+.button:hover {
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-md);
+}
+
+button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--primary-dim);
+}
+
+/* ---------------- Table ---------------- */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.table-container table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+}
+
+.table-container th,
+.table-container td {
+  padding: 0.65rem 0.9rem;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.table-container th {
+  background: var(--surface-hover);
+  text-align: left;
+  font-weight: 600;
+}
+
+.table-container tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Zebra stripes */
+.table-container tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface-hover) 30%, transparent);
+}
+
+/* Sticky header for long tables */
+.table-container thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Hide scrollbars on WebKit */
+.table-container::-webkit-scrollbar {
+  height: 0.6rem;
+}
+.table-container::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary) 50%, transparent);
+  border-radius: 9999px;
+}
+
+/* ---------------- File Uploader (no-data state) ---------------- */
+.container > input[type="file"] {
+  display: block;
+  margin: 4rem auto 0 auto;
+  width: 100%;
+  max-width: 520px;
+  padding: 3rem 1.5rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.container > input[type="file"]:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+}
+
+/* Style of the inner "Choose File" button (modern browsers) */
+.container > input[type="file"]::file-selector-button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.container > input[type="file"]::file-selector-button:hover {
+  background: var(--primary-dim);
+}
+
+/* Message under the uploader */
+.container > p {
+  text-align: center;
+  margin-top: 1.25rem;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* Improve focus ring for accessibility */
+input[type="file"]:focus-visible,
+button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  outline-offset: 2px;
+}
+/* Chrome, Safari, Edge 対応: スピンボタン非表示 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox 対応 */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
