@@ -214,17 +214,25 @@ export default function App() {
   };
 
   const exportPNGList = () => {
+    // Current theme colors
+    const styles = getComputedStyle(document.documentElement);
+    const bg     = styles.getPropertyValue('--bg').trim() || '#ffffff';
+    const surface= styles.getPropertyValue('--surface').trim() || '#ffffff';
+    const border = styles.getPropertyValue('--border').trim() || '#ddd';
+    const text   = styles.getPropertyValue('--text').trim() || '#000';
+
     // 縦型: フィルタ済みデータから手動でカード要素を生成
     let wrapper = document.createElement('div');
-    wrapper.style.backgroundColor = '#ffffff';
+    wrapper.style.backgroundColor = bg;
+    wrapper.style.color = text;
     wrapper.style.padding = '1rem';
     filtered.forEach(r => {
       const card = document.createElement('div');
       card.style.margin = '0.5rem 0';
       card.style.padding = '0.75rem';
-      card.style.border = '1px solid #ddd';
+      card.style.border = `1px solid ${border}`;
       card.style.borderRadius = '4px';
-      card.style.background = '#fff';
+      card.style.background = surface;
       const fields = [
         ['締切', r.締切.toFormat('yyyy-MM-dd HH:mm')],
         ['教材', r.教材],
@@ -248,7 +256,7 @@ export default function App() {
     document.body.appendChild(wrapper);
     html2canvas(wrapper, {
       scale: 2,
-      backgroundColor: '#ffffff',
+      backgroundColor: bg,
       useCORS: true,
       width: wrapper.scrollWidth,
       height: wrapper.scrollHeight
@@ -262,19 +270,26 @@ export default function App() {
 
   const exportPNGTable = (isMobile) => {
     const name = isMobile ? 'webclass_todo_mobile.png' : 'webclass_todo_table.png';
+    const styles = getComputedStyle(document.documentElement);
+    const bg     = styles.getPropertyValue('--bg').trim() || '#ffffff';
+    const surface= styles.getPropertyValue('--surface').trim() || '#ffffff';
+    const border = styles.getPropertyValue('--border').trim() || '#ddd';
+    const text   = styles.getPropertyValue('--text').trim() || '#000';
+
     let wrapper = null;
     if (isMobile) {
       // 縦型: フィルタ済みデータから手動でカード要素を生成
       wrapper = document.createElement('div');
-      wrapper.style.backgroundColor = '#ffffff';
+      wrapper.style.backgroundColor = bg;
+      wrapper.style.color = text;
       wrapper.style.padding = '1rem';
       filtered.forEach(r => {
         const card = document.createElement('div');
         card.style.margin = '0.5rem 0';
         card.style.padding = '0.75rem';
-        card.style.border = '1px solid #ddd';
+        card.style.border = `1px solid ${border}`;
         card.style.borderRadius = '4px';
-        card.style.background = '#fff';
+        card.style.background = surface;
         const fields = [
           ['締切', r.締切.toFormat('yyyy-MM-dd HH:mm')],
           ['教材', r.教材],
@@ -303,7 +318,8 @@ export default function App() {
       const tableEl = container.querySelector('table');
       if (!tableEl) return;
       wrapper = document.createElement('div');
-      wrapper.style.backgroundColor = '#ffffff';
+      wrapper.style.backgroundColor = bg;
+      wrapper.style.color = text;
       wrapper.style.padding = '1rem';
       wrapper.appendChild(tableEl.cloneNode(true));
       document.body.appendChild(wrapper);
@@ -311,7 +327,7 @@ export default function App() {
     // html2canvas でキャプチャ
     html2canvas(wrapper, {
       scale: 2,
-      backgroundColor: '#ffffff',
+      backgroundColor: bg,
       useCORS: true,
       width: wrapper.scrollWidth,
       height: wrapper.scrollHeight
