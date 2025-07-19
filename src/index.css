@@ -257,6 +257,10 @@ select {
   background: var(--surface-hover);
 }
 
+.reset-btn {
+  align-self: flex-start;
+}
+
 /* ---------------- Metrics ---------------- */
 .metrics {
   display: flex;
