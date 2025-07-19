@@ -51,7 +51,7 @@ function downloadBlob(data, fileName, mimeType) {
 export default function App() {
   // State
   const [data, setData] = useState([]);
-  const [daysFilter, setDaysFilter] = useState(9);
+  const [daysFilter, setDaysFilter] = useState(DEFAULT_SPAN_DAYS);
   const [startDate, setStartDate] = useState(DateTime.local().toISODate());
   const [endDate, setEndDate] = useState(DateTime.local().plus({ days: daysFilter }).toISODate());
   const [statuses, setStatuses] = useState([]);
