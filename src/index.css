@@ -116,6 +116,11 @@ header img.logo {
     gap: var(--gap);
   }
   header { grid-column: 1 / -1; }
+  .container > input[type="file"],
+  .container > p {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
   .sidebar {
     position: sticky;
     top: var(--gap);
