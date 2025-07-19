@@ -80,6 +80,18 @@ export default function App() {
   const mobileRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
 
+  // フィルタ条件のみリセット
+  const resetFilters = () => {
+    const today = DateTime.local().toISODate();
+    setDaysFilter(DEFAULT_SPAN_DAYS);
+    setStartDate(today);
+    setEndDate(
+      DateTime.fromISO(today).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
+    );
+    setStatuses([]);
+    setKeyword("");
+  };
+
   // startDate または daysFilter が変わったら endDate を自動更新
   useEffect(() => {
     const sd = DateTime.fromISO(startDate);
@@ -466,14 +478,7 @@ export default function App() {
     setData([]);
 
     // 抽出条件のリセット
-    const today = DateTime.local().toISODate();
-    setDaysFilter(DEFAULT_SPAN_DAYS);
-    setStartDate(today);
-    setEndDate(
-      DateTime.fromISO(today).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-    );
-    setStatuses([]);
-    setKeyword("");
+    resetFilters();
 
     sessionStorage.removeItem("webclass-todo");
 
@@ -583,6 +588,13 @@ export default function App() {
                       onChange={(e) => setKeyword(e.target.value)}
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="reset-btn"
+                  >
+                    条件リセット
+                  </button>
                 </div>
               </details>
             </aside>
@@ -610,14 +622,22 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((r, i) => (
-                      <tr key={i}>
-                        <td>{r.締切.toFormat("yyyy-MM-dd HH:mm")}</td>
-                        <td>{r.教材}</td>
-                        <td>{r.コース名}</td>
-                        <td>{r.状態}</td>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: "center" }}>
+                          該当するデータがありません
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filtered.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.締切.toFormat("yyyy-MM-dd HH:mm")}</td>
+                          <td>{r.教材}</td>
+                          <td>{r.コース名}</td>
+                          <td>{r.状態}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
