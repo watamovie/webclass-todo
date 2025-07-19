@@ -102,9 +102,8 @@ const buildImageWrapper = (isMobile, filtered, tableRef) => {
   } else {
     const container = tableRef.current;
     if (!container) return null;
-    const tableEl = container.querySelector("table");
-    if (!tableEl) return null;
-    wrapper.appendChild(tableEl.cloneNode(true));
+    const clone = container.cloneNode(true);
+    wrapper.appendChild(clone);
   }
   return wrapper;
 };
