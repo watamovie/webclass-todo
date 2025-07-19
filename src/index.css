@@ -10,18 +10,18 @@
 /* ---------------- Root palette & typography ---------------- */
 :root {
   /* Light theme */
-  --bg:            #f9fafb;
-  --surface:       #ffffff;
+  --bg: #f9fafb;
+  --surface: #ffffff;
   --surface-hover: #f1f5f9;
-  --border:        #e5e7eb;
-  --text:          #1f2937;
-  --text-secondary:#1f2937;
-  --primary:       #3b82f6;
-  --primary-dim:   #2563eb;
-  --radius:        0.75rem;
-  --gap:           1.25rem;
+  --border: #e5e7eb;
+  --text: #1f2937;
+  --text-secondary: #1f2937;
+  --primary: #3b82f6;
+  --primary-dim: #2563eb;
+  --radius: 0.75rem;
+  --gap: 1.25rem;
   --sidebar-width: 260px;
-  --font:          "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+  --font: "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
 
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -30,14 +30,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg:            #121212;
-    --surface:       #1A1A1A;
-    --surface-hover: #2A2A2A;
-    --border:        #333333;
-    --text:          #E0E0E0;
-    --text-secondary:#9E9E9E;
-    --primary:       #3b82f6;
-    --primary-dim:   #60a5fa;
+    --bg: #121212;
+    --surface: #1a1a1a;
+    --surface-hover: #2a2a2a;
+    --border: #333333;
+    --text: #e0e0e0;
+    --text-secondary: #9e9e9e;
+    --primary: #3b82f6;
+    --primary-dim: #60a5fa;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
   }
@@ -45,20 +45,20 @@
   input[type="number"],
   input[type="text"],
   select {
-    background: #2A2A2A;
-    color: #FFFFFF;
+    background: #2a2a2a;
+    color: #ffffff;
   }
 
   button,
   .button,
   .number-spinner button {
-    background: #2D2D2D;
-    color: #FFFFFF;
+    background: #2d2d2d;
+    color: #ffffff;
   }
   button:hover,
   .button:hover,
   .number-spinner button:hover {
-    background: #3C3C3C;
+    background: #3c3c3c;
   }
 
   input:focus-visible,
@@ -68,22 +68,25 @@
   }
 
   .table-container tr:hover {
-    background: #2A2A2A;
+    background: #2a2a2a;
   }
 
   .mobile-container > div {
-    background: #1A1A1A !important;
+    background: #1a1a1a !important;
     border-color: #333333 !important;
-    color: #E0E0E0;
+    color: #e0e0e0;
   }
 }
 
 /* ---------------- Reset ---------------- */
 *,
 *::before,
-*::after { box-sizing: border-box; }
+*::after {
+  box-sizing: border-box;
+}
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
@@ -98,13 +101,20 @@ body {
 }
 
 /* Remove tap-highlight on mobile */
-button, input, select {
+button,
+input,
+select {
   font: inherit;
   -webkit-tap-highlight-color: transparent;
 }
 
-a { color: var(--primary); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
 
 /* ---------------- Layout container ---------------- */
 .container {
@@ -152,7 +162,9 @@ header img.logo {
     grid-template-columns: var(--sidebar-width) 1fr;
     gap: var(--gap);
   }
-  header { grid-column: 1 / -1; }
+  header {
+    grid-column: 1 / -1;
+  }
   .container > input[type="file"],
   .container > p {
     grid-column: 1 / -1;
@@ -182,7 +194,9 @@ header img.logo {
 }
 
 .filter-accordion summary::marker,
-.filter-accordion summary::-webkit-details-marker { display: none; }
+.filter-accordion summary::-webkit-details-marker {
+  display: none;
+}
 
 .filter-accordion summary::after {
   content: "›";
@@ -304,7 +318,9 @@ button,
   background: var(--surface);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 button:hover,
@@ -389,7 +405,9 @@ button.primary:hover {
   border-radius: var(--radius);
   background: var(--surface-hover);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .container > input[type="file"]:hover {
@@ -436,4 +454,54 @@ input[type="number"]::-webkit-outer-spin-button {
 /* Firefox 対応 */
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* ---------------- Preview Modal ---------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: var(--surface);
+  color: var(--text);
+  padding: 1rem;
+  border-radius: var(--radius);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: var(--shadow-md);
+}
+
+.csv-preview {
+  overflow: auto;
+  max-width: 80vw;
+  max-height: 60vh;
+}
+
+.csv-preview table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.csv-preview th,
+.csv-preview td {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.csv-preview th {
+  background: var(--surface-hover);
+}
+
+.modal img {
+  max-width: 80vw;
+  max-height: 80vh;
+  object-fit: contain;
 }
