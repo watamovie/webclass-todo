@@ -371,7 +371,7 @@ export default function App() {
             accept=".csv"
             onChange={handleFile}
           />
-          <p>CSVをアップロードしてください。</p>
+          <p>課題実施状況一覧のCSVを選択してください。</p>
         </>
       )}
       {data.length > 0 && (
