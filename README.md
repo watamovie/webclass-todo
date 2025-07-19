@@ -44,3 +44,4 @@ npm run dev
 
 # ビルド（dist フォルダ生成）
 npm run build
+```
