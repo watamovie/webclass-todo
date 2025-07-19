@@ -68,6 +68,7 @@ export default function App() {
   // テーブルとモバイル用コンテナの参照（忘れるとレンダリング時にエラーになります）
   const tableRef = useRef(null);
   const mobileRef = useRef(null);
+  const [preview, setPreview] = useState(null); // {url, name, mime, blob}
 
   // startDate または daysFilter が変わったら endDate を自動更新
   useEffect(() => {
@@ -183,9 +184,27 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const openPreview = (blob, name, mime) => {
+    const url = URL.createObjectURL(blob);
+    setPreview({ url, name, mime, blob });
+  };
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+
+  const confirmDownload = () => {
+    if (preview) {
+      saveFile(preview.blob, preview.name);
+      closePreview();
+    }
+  };
+
   const exportCSV = () => {
     const csv = Papa.unparse(filtered, { columns: ['締切','教材','コース名','状態'] });
-    downloadBlob(csv, 'todo_filtered.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    openPreview(blob, 'todo_filtered.csv', 'text/csv');
   };
 
   const exportICS = () => {
@@ -215,7 +234,8 @@ export default function App() {
   const exportTodoist = () => {
     const recs = filtered.map(r => ({ TYPE:'task', CONTENT:`${r.教材} (${r.コース名})`, DATE:r.締切.toFormat('yyyy-MM-dd HH:mm'), DATE_LANG:'ja', TIMEZONE:'Asia/Tokyo' }));
     const csv = Papa.unparse(recs);
-    downloadBlob(csv, 'todoist_template.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    openPreview(blob, 'todoist_template.csv', 'text/csv');
   };
 
   const exportPNGList = () => {
@@ -259,14 +279,16 @@ export default function App() {
       wrapper.appendChild(card);
     });
     document.body.appendChild(wrapper);
-    html2canvas(wrapper, {
+  html2canvas(wrapper, {
       scale: 2,
       backgroundColor: bg,
       useCORS: true,
       width: wrapper.scrollWidth,
       height: wrapper.scrollHeight
     })
-      .then(canvas => canvas.toBlob(blob => downloadBlob(blob, 'webclass_todo_mobile.png', 'image/png'), 'image/png'))
+      .then(canvas =>
+        canvas.toBlob(blob => openPreview(blob, 'webclass_todo_mobile.png', 'image/png'), 'image/png')
+      )
       .catch(() => alert('webclass_todo_mobile.png の生成に失敗しました'))
       .finally(() => {
         if (wrapper) document.body.removeChild(wrapper);
@@ -330,14 +352,16 @@ export default function App() {
       document.body.appendChild(wrapper);
     }
     // html2canvas でキャプチャ
-    html2canvas(wrapper, {
+  html2canvas(wrapper, {
       scale: 2,
       backgroundColor: bg,
       useCORS: true,
       width: wrapper.scrollWidth,
       height: wrapper.scrollHeight
     })
-      .then(canvas => canvas.toBlob(blob => saveFile(blob, name), 'image/png'))
+      .then(canvas =>
+        canvas.toBlob(blob => openPreview(blob, name, 'image/png'), 'image/png')
+      )
       .catch(() => alert(`${name} の生成に失敗しました`))
       .finally(() => {
         if (wrapper) document.body.removeChild(wrapper);
@@ -374,6 +398,7 @@ export default function App() {
 
   // Render
   return (
+    <>
     <div className="container">
       <header>
         <h1>📋 WebClass To-Do</h1>
@@ -455,5 +480,21 @@ export default function App() {
         </>
       )}
     </div>
+    {preview && (
+      <div className="modal-overlay" onClick={closePreview}>
+        <div className="modal" onClick={e => e.stopPropagation()}>
+          {preview.mime.startsWith('image/') ? (
+            <img src={preview.url} alt={preview.name} style={{maxWidth:'100%'}} />
+          ) : (
+            <iframe src={preview.url} title="preview" style={{width:'80vw',height:'60vh',border:'none'}} />
+          )}
+          <div style={{textAlign:'right',marginTop:'1rem'}}>
+            <button onClick={confirmDownload} className="primary">ダウンロード</button>
+            <button onClick={closePreview} style={{marginLeft:'0.5rem'}}>閉じる</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
