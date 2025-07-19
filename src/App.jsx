@@ -487,7 +487,7 @@ export default function App() {
     <>
       <div className="container">
         <header>
-          <h1>📋 WebClass To-Do</h1>
+          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>📋 WebClass To-Do</h1>
           {/* ファイル解除ボタンはデータ読み込み後だけ表示 */}
           {data.length > 0 && (
             <button onClick={clearFile} style={{ marginLeft: "1rem" }}>
