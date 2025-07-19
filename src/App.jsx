@@ -57,6 +57,11 @@ export default function App() {
   const [statuses, setStatuses] = useState([]);
   const [keyword, setKeyword] = useState('');
 
+  // Filter accordion open state (desktop open by default)
+  const [isFilterOpen, setIsFilterOpen] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
+
   // ファイル入力要素をクリアするための ref
   const fileInputRef = useRef(null);
 
@@ -393,7 +398,11 @@ export default function App() {
       {data.length > 0 && (
         <>
           <aside className="sidebar">
-            <details className="filter-accordion" open>
+            <details
+              className="filter-accordion"
+              open={isFilterOpen}
+              onToggle={e => setIsFilterOpen(e.target.open)}
+            >
               <summary>🔍 抽出条件</summary>
               <div className="filter-fields">
                 <label htmlFor="daysFilter">期間を指定（日）:</label>
