@@ -364,6 +364,22 @@ button.primary:hover {
   border-radius: var(--radius);
   cursor: pointer;
   transition: background 0.15s ease;
+  font: inherit;
+}
+
+/* Safari fallback */
+.container > input[type="file"]::-webkit-file-upload-button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font: inherit;
+}
+.container > input[type="file"]::-webkit-file-upload-button:hover {
+  background: var(--primary-dim);
 }
 
 .container > input[type="file"]::file-selector-button:hover {
