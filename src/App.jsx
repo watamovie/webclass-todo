@@ -54,6 +54,81 @@ function downloadBlob(data, fileName, mimeType) {
   URL.revokeObjectURL(url);
 }
 
+// ------ Image helper utilities ------
+const getThemeColors = () => {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    bg: styles.getPropertyValue("--bg").trim() || "#ffffff",
+    surface: styles.getPropertyValue("--surface").trim() || "#ffffff",
+    border: styles.getPropertyValue("--border").trim() || "#ddd",
+    text: styles.getPropertyValue("--text").trim() || "#000",
+  };
+};
+
+const buildImageWrapper = (isMobile, filtered, tableRef) => {
+  const { bg, surface, border, text } = getThemeColors();
+  const wrapper = document.createElement("div");
+  wrapper.style.backgroundColor = bg;
+  wrapper.style.color = text;
+  wrapper.style.padding = "1rem";
+  if (isMobile) {
+    filtered.forEach((r) => {
+      const card = document.createElement("div");
+      card.style.margin = "0.5rem 0";
+      card.style.padding = "0.75rem";
+      card.style.border = `1px solid ${border}`;
+      card.style.borderRadius = "4px";
+      card.style.background = surface;
+      const fields = [
+        ["締切", r.締切.toFormat("yyyy-MM-dd HH:mm")],
+        ["教材", r.教材],
+        ["コース", r.コース名],
+        ["状態", r.状態],
+      ];
+      fields.forEach(([label, value]) => {
+        const row = document.createElement("div");
+        row.style.marginBottom = "0.25rem";
+        const keyEl = document.createElement("span");
+        keyEl.style.fontWeight = "bold";
+        keyEl.textContent = `${label}: `;
+        const valEl = document.createElement("span");
+        valEl.textContent = value;
+        row.appendChild(keyEl);
+        row.appendChild(valEl);
+        card.appendChild(row);
+      });
+      wrapper.appendChild(card);
+    });
+  } else {
+    const container = tableRef.current;
+    if (!container) return null;
+    const tableEl = container.querySelector("table");
+    if (!tableEl) return null;
+    wrapper.appendChild(tableEl.cloneNode(true));
+  }
+  return wrapper;
+};
+
+const captureAndPreview = async (wrapper, name, openPreview) => {
+  if (!wrapper) return;
+  const { bg } = getThemeColors();
+  document.body.appendChild(wrapper);
+  try {
+    const canvas = await html2canvas(wrapper, {
+      scale: window.devicePixelRatio || 2,
+      backgroundColor: bg,
+      useCORS: true,
+      width: wrapper.scrollWidth,
+      height: wrapper.scrollHeight,
+    });
+    canvas.toBlob((blob) => openPreview(blob, name, "image/png"), "image/png");
+  } catch (e) {
+    alert(`${name} の生成に失敗しました`);
+  } finally {
+    document.body.removeChild(wrapper);
+  }
+};
+
 export default function App() {
   // State
   const [data, setData] = useState([]);
@@ -313,141 +388,16 @@ export default function App() {
   };
 
   const exportPNGList = () => {
-    // Current theme colors
-    const styles = getComputedStyle(document.documentElement);
-    const bg = styles.getPropertyValue("--bg").trim() || "#ffffff";
-    const surface = styles.getPropertyValue("--surface").trim() || "#ffffff";
-    const border = styles.getPropertyValue("--border").trim() || "#ddd";
-    const text = styles.getPropertyValue("--text").trim() || "#000";
-
-    // 縦型: フィルタ済みデータから手動でカード要素を生成
-    let wrapper = document.createElement("div");
-    wrapper.style.backgroundColor = bg;
-    wrapper.style.color = text;
-    wrapper.style.padding = "1rem";
-    filtered.forEach((r) => {
-      const card = document.createElement("div");
-      card.style.margin = "0.5rem 0";
-      card.style.padding = "0.75rem";
-      card.style.border = `1px solid ${border}`;
-      card.style.borderRadius = "4px";
-      card.style.background = surface;
-      const fields = [
-        ["締切", r.締切.toFormat("yyyy-MM-dd HH:mm")],
-        ["教材", r.教材],
-        ["コース", r.コース名],
-        ["状態", r.状態],
-      ];
-      fields.forEach(([label, value]) => {
-        const row = document.createElement("div");
-        row.style.marginBottom = "0.25rem";
-        const keyEl = document.createElement("span");
-        keyEl.style.fontWeight = "bold";
-        keyEl.textContent = `${label}: `;
-        const valEl = document.createElement("span");
-        valEl.textContent = value;
-        row.appendChild(keyEl);
-        row.appendChild(valEl);
-        card.appendChild(row);
-      });
-      wrapper.appendChild(card);
-    });
-    document.body.appendChild(wrapper);
-    html2canvas(wrapper, {
-      scale: 2,
-      backgroundColor: bg,
-      useCORS: true,
-      width: wrapper.scrollWidth,
-      height: wrapper.scrollHeight,
-    })
-      .then((canvas) =>
-        canvas.toBlob(
-          (blob) => openPreview(blob, "webclass_todo_mobile.png", "image/png"),
-          "image/png",
-        ),
-      )
-      .catch(() => alert("webclass_todo_mobile.png の生成に失敗しました"))
-      .finally(() => {
-        if (wrapper) document.body.removeChild(wrapper);
-      });
+    const wrapper = buildImageWrapper(true, filtered, tableRef);
+    captureAndPreview(wrapper, "webclass_todo_mobile.png", openPreview);
   };
 
   const exportPNGTable = (isMobile) => {
     const name = isMobile
       ? "webclass_todo_mobile.png"
       : "webclass_todo_table.png";
-    const styles = getComputedStyle(document.documentElement);
-    const bg = styles.getPropertyValue("--bg").trim() || "#ffffff";
-    const surface = styles.getPropertyValue("--surface").trim() || "#ffffff";
-    const border = styles.getPropertyValue("--border").trim() || "#ddd";
-    const text = styles.getPropertyValue("--text").trim() || "#000";
-
-    let wrapper = null;
-    if (isMobile) {
-      // 縦型: フィルタ済みデータから手動でカード要素を生成
-      wrapper = document.createElement("div");
-      wrapper.style.backgroundColor = bg;
-      wrapper.style.color = text;
-      wrapper.style.padding = "1rem";
-      filtered.forEach((r) => {
-        const card = document.createElement("div");
-        card.style.margin = "0.5rem 0";
-        card.style.padding = "0.75rem";
-        card.style.border = `1px solid ${border}`;
-        card.style.borderRadius = "4px";
-        card.style.background = surface;
-        const fields = [
-          ["締切", r.締切.toFormat("yyyy-MM-dd HH:mm")],
-          ["教材", r.教材],
-          ["コース", r.コース名],
-          ["状態", r.状態],
-        ];
-        fields.forEach(([label, value]) => {
-          const row = document.createElement("div");
-          row.style.marginBottom = "0.25rem";
-          const keyEl = document.createElement("span");
-          keyEl.style.fontWeight = "bold";
-          keyEl.textContent = `${label}: `;
-          const valEl = document.createElement("span");
-          valEl.textContent = value;
-          row.appendChild(keyEl);
-          row.appendChild(valEl);
-          card.appendChild(row);
-        });
-        wrapper.appendChild(card);
-      });
-      document.body.appendChild(wrapper);
-    } else {
-      // 横型: テーブルをクローンしてラッパーに入れる
-      const container = tableRef.current;
-      if (!container) return;
-      const tableEl = container.querySelector("table");
-      if (!tableEl) return;
-      wrapper = document.createElement("div");
-      wrapper.style.backgroundColor = bg;
-      wrapper.style.color = text;
-      wrapper.style.padding = "1rem";
-      wrapper.appendChild(tableEl.cloneNode(true));
-      document.body.appendChild(wrapper);
-    }
-    // html2canvas でキャプチャ
-    html2canvas(wrapper, {
-      scale: 2,
-      backgroundColor: bg,
-      useCORS: true,
-      width: wrapper.scrollWidth,
-      height: wrapper.scrollHeight,
-    })
-      .then((canvas) =>
-        canvas.toBlob(
-          (blob) => openPreview(blob, name, "image/png"),
-          "image/png",
-        ),
-      )
-      .catch(() => alert(`${name} の生成に失敗しました`))
-      .finally(() => {
-        if (wrapper) document.body.removeChild(wrapper);
-      });
+    const wrapper = buildImageWrapper(isMobile, filtered, tableRef);
+    captureAndPreview(wrapper, name, openPreview);
   };
 
   const shareToReminders = () => {
