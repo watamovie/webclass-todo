@@ -374,6 +374,14 @@ button.primary:hover {
   font-weight: 600;
 }
 
+.table-container th.sortable {
+  cursor: pointer;
+}
+.table-container th.sortable .arrow {
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+}
+
 .table-container tr:hover {
   background: var(--surface-hover);
 }
