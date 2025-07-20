@@ -139,6 +139,8 @@ export default function App() {
   );
   const [statuses, setStatuses] = useState([]);
   const [keyword, setKeyword] = useState("");
+  const [sortField, setSortField] = useState("締切");
+  const [sortAsc, setSortAsc] = useState(true);
 
   // Filter accordion open state (desktop open by default)
   const [isFilterOpen, setIsFilterOpen] = useState(
@@ -165,6 +167,8 @@ export default function App() {
     );
     setStatuses([]);
     setKeyword("");
+    setSortField("締切");
+    setSortAsc(true);
   };
 
   // startDate または daysFilter が変わったら endDate を自動更新
@@ -190,6 +194,8 @@ export default function App() {
         setEndDate(filters.endDate);
         setStatuses(filters.statuses);
         setKeyword(filters.keyword);
+        if (filters.sortField) setSortField(filters.sortField);
+        if (typeof filters.sortAsc === "boolean") setSortAsc(filters.sortAsc);
       } catch (e) {
         console.error("State restore failed:", e);
       }
@@ -215,10 +221,18 @@ export default function App() {
         コース名: r.コース名,
         状態: r.状態,
       })),
-      filters: { days: daysFilter, startDate, endDate, statuses, keyword },
+      filters: {
+        days: daysFilter,
+        startDate,
+        endDate,
+        statuses,
+        keyword,
+        sortField,
+        sortAsc,
+      },
     };
     sessionStorage.setItem("webclass-todo", JSON.stringify(toStore));
-  }, [data, daysFilter, startDate, endDate, statuses, keyword]);
+  }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
 
   // File upload parsing
   const handleFile = (e) => {
@@ -293,7 +307,20 @@ export default function App() {
       (r) =>
         !keyword || r.教材.includes(keyword) || r.コース名.includes(keyword),
     )
-    .sort((a, b) => a.締切 - b.締切);
+    .sort((a, b) => {
+      const va =
+        sortField === "締切" ? a.締切.toMillis() : a[sortField] || "";
+      const vb =
+        sortField === "締切" ? b.締切.toMillis() : b[sortField] || "";
+      if (va < vb) return sortAsc ? -1 : 1;
+      if (va > vb) return sortAsc ? 1 : -1;
+      return 0;
+    });
+
+  const nextDeadline = filtered.reduce((min, r) => {
+    if (!min || r.締切 < min) return r.締切;
+    return min;
+  }, null);
 
   // Utils
   const saveFile = (blob, name) => {
@@ -328,6 +355,15 @@ export default function App() {
     if (preview) {
       saveFile(preview.blob, preview.name);
       closePreview();
+    }
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
     }
   };
 
@@ -556,10 +592,8 @@ export default function App() {
             <main className="main">
               <div className="metrics">
                 <span>抽出件数: {filtered.length}</span>
-                {filtered.length > 0 && (
-                  <span>
-                    次の締切: {filtered[0].締切.toFormat("yyyy-MM-dd")}
-                  </span>
+                {nextDeadline && (
+                  <span>次の締切: {nextDeadline.toFormat("yyyy-MM-dd")}</span>
                 )}
               </div>
               <div
@@ -570,10 +604,30 @@ export default function App() {
                 <table style={{ fontSize: "0.875rem", lineHeight: "1.4" }}>
                   <thead>
                     <tr>
-                      <th>締切</th>
-                      <th>教材</th>
-                      <th>コース名</th>
-                      <th>状態</th>
+                      <th onClick={() => handleSort("締切")} className="sortable">
+                        締切
+                        {sortField === "締切" && (
+                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
+                        )}
+                      </th>
+                      <th onClick={() => handleSort("教材")} className="sortable">
+                        教材
+                        {sortField === "教材" && (
+                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
+                        )}
+                      </th>
+                      <th onClick={() => handleSort("コース名")} className="sortable">
+                        コース名
+                        {sortField === "コース名" && (
+                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
+                        )}
+                      </th>
+                      <th onClick={() => handleSort("状態")} className="sortable">
+                        状態
+                        {sortField === "状態" && (
+                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
+                        )}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
