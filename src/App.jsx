@@ -152,9 +152,8 @@ export default function App() {
   // ファイル入力要素をクリアするための ref
   const fileInputRef = useRef(null);
 
-  // テーブルとモバイル用コンテナの参照（忘れるとレンダリング時にエラーになります）
+  // テーブルの参照（PNG 書き出し用）
   const tableRef = useRef(null);
-  const mobileRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
 
   // フィルタ条件のみリセット
@@ -663,37 +662,30 @@ export default function App() {
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
               </div>
-              <div
-                className="mobile-container"
-                ref={mobileRef}
-                style={{ display: "none" }}
-              >
-                {filtered.map((r, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      margin: "0.5rem 0",
-                      padding: "0.75rem",
-                      border: "1px solid #ddd",
-                      borderRadius: "4px",
-                      background: "#fff",
-                    }}
-                  >
-                    <div>
-                      <strong>締切:</strong>{" "}
-                      {r.締切.toFormat("yyyy-MM-dd HH:mm")}
+              <div className="list-container">
+                {Object.entries(
+                  filtered.reduce((acc, r) => {
+                    const d = r.締切.toFormat("yyyy-MM-dd");
+                    acc[d] = acc[d] ? [...acc[d], r] : [r];
+                    return acc;
+                  }, {})
+                )
+                  .sort(([a], [b]) => (a < b ? -1 : 1))
+                  .map(([date, rows]) => (
+                    <div key={date} className="list-day">
+                      <h3 className="list-date">{date}</h3>
+                      {rows.map((r, i) => (
+                        <div key={i} className="list-item">
+                          <div className="list-title">{r.教材}</div>
+                          <div className="list-meta">
+                            <span>{r.締切.toFormat("HH:mm")}</span>
+                            <span>{r.コース名}</span>
+                            <span>{r.状態}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <strong>教材:</strong> {r.教材}
-                    </div>
-                    <div>
-                      <strong>コース:</strong> {r.コース名}
-                    </div>
-                    <div>
-                      <strong>状態:</strong> {r.状態}
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </main>
           </>
