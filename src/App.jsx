@@ -230,7 +230,7 @@ export default function App() {
       window.removeEventListener("pageshow", restore);
       window.removeEventListener("popstate", onPop);
     };
-  }, []);
+  }, [preview]);
 
   // Persist and push history
   useEffect(() => {
@@ -275,6 +275,8 @@ export default function App() {
       exportPNGTable,
       exportPNGList,
       closePreview,
+      confirmDownload,
+      resetFilters,
     };
   });
 
@@ -285,6 +287,9 @@ export default function App() {
       if (e.target.closest('input,textarea,select')) return;
       if (e.key === 'Escape') {
         h.closePreview();
+      } else if (e.key === 'Enter' && preview) {
+        e.preventDefault();
+        h.confirmDownload();
       } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         fileInputRef.current?.click();
@@ -303,6 +308,9 @@ export default function App() {
       } else if (e.key === 'l' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportPNGList();
+      } else if (e.key === 'r' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.resetFilters();
       } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         window.open('./usage.html', '_blank');
@@ -310,7 +318,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [preview]);
 
   // Global error handling
   useEffect(() => {
