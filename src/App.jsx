@@ -460,7 +460,7 @@ export default function App() {
             />
             <p>課題実施状況一覧のCSVを選択してください。</p>
             <p>
-              <a href="usage.html" target="_blank" rel="noopener" className="button">
+              <a href="./usage.html" target="_blank" rel="noopener" className="button">
                 使い方を見る
               </a>
             </p>
