@@ -176,13 +176,14 @@ export default function App() {
     setEndDate(sd.plus({ days: daysFilter }).toISODate());
   }, [startDate, daysFilter]);
 
-  // マウント時に常に sessionStorage から状態を復元
+  const prevStateRef = useRef(null);
+
+  // マウント時に履歴・sessionStorage から状態を復元
   useEffect(() => {
-    const restore = () => {
-      const stored = sessionStorage.getItem("webclass-todo");
-      if (!stored) return;
+    const applyState = (state) => {
+      if (!state) return;
       try {
-        const { data: raw, filters } = JSON.parse(stored);
+        const { data: raw, filters } = state;
         const parsed = raw.map((r) => ({
           ...r,
           締切: DateTime.fromISO(r.締切, { zone: "Asia/Tokyo" }),
@@ -195,25 +196,42 @@ export default function App() {
         setKeyword(filters.keyword);
         if (filters.sortField) setSortField(filters.sortField);
         if (typeof filters.sortAsc === "boolean") setSortAsc(filters.sortAsc);
+        prevStateRef.current = JSON.stringify(state);
       } catch (e) {
-        console.error("State restore failed:", e);
+        console.error("State apply failed:", e);
       }
     };
 
-    // 初回マウント
+    const restore = () => {
+      let state = window.history.state;
+      if (!state) {
+        const stored = sessionStorage.getItem("webclass-todo");
+        if (stored) {
+          try {
+            state = JSON.parse(stored);
+          } catch {}
+        }
+      }
+      if (state) {
+        applyState(state);
+        window.history.replaceState(state, "");
+      }
+    };
+
     restore();
-    // 「戻る」で bfcache から復帰したときにも呼ぶ
     window.addEventListener("pageshow", restore);
+    const onPop = (e) => applyState(e.state);
+    window.addEventListener("popstate", onPop);
 
     return () => {
       window.removeEventListener("pageshow", restore);
+      window.removeEventListener("popstate", onPop);
     };
   }, []);
 
-  // Persist
+  // Persist and push history
   useEffect(() => {
-    if (!data.length) return;
-    const toStore = {
+    const state = {
       data: data.map((r) => ({
         締切: r.締切.toISO(),
         教材: r.教材,
@@ -230,7 +248,19 @@ export default function App() {
         sortAsc,
       },
     };
-    sessionStorage.setItem("webclass-todo", JSON.stringify(toStore));
+    const json = JSON.stringify(state);
+    if (prevStateRef.current === null) {
+      window.history.replaceState(state, "");
+    } else if (prevStateRef.current !== json) {
+      window.history.pushState(state, "");
+    }
+    prevStateRef.current = json;
+
+    if (data.length) {
+      sessionStorage.setItem("webclass-todo", json);
+    } else {
+      sessionStorage.removeItem("webclass-todo");
+    }
   }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
 
   // File upload parsing
@@ -466,6 +496,18 @@ export default function App() {
     resetFilters();
 
     sessionStorage.removeItem("webclass-todo");
+
+    const state = { data: [], filters: {
+      days: DEFAULT_SPAN_DAYS,
+      startDate: TODAY,
+      endDate: DateTime.fromISO(TODAY).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
+      statuses: [],
+      keyword: "",
+      sortField: "締切",
+      sortAsc: true,
+    }};
+    window.history.replaceState(state, "");
+    prevStateRef.current = JSON.stringify(state);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
