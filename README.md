@@ -1,6 +1,6 @@
 # WebClass To-Do 抽出ツール
 
-**WebClass の課題一覧 CSV から、To-Do タスクを抽出して整形・エクスポートできるWeb アプリです。**  
+**WebClass の課題一覧 CSV から、To-Do タスクを抽出して整形・エクスポートできる Web アプリです。**  
 モバイル対応・インストール不要・サクサク動作。
 
 
@@ -17,6 +17,23 @@
   - PNG（縦／表形式）
 - 📱 iPhone Safari でも動作確認済み
 - ☁️ [Cloudflare Pages でホスティング中](https://webclass-todo.pages.dev)
+
+---
+
+## ⌨️ キーボードショートカット
+
+| 操作                        | ショートカット                     |
+|-----------------------------|------------------------------------|
+| ファイルを開く              | `Ctrl/Cmd + O`                     |
+| CSV エクスポート            | `Ctrl/Cmd + Shift + C`             |
+| iCalendar エクスポート      | `Ctrl/Cmd + Shift + I`             |
+| Todoist CSV エクスポート    | `Ctrl/Cmd + Shift + T`             |
+| PNG（テーブル）エクスポート | `Ctrl/Cmd + Shift + P`             |
+| PNG（縦リスト）エクスポート | `Ctrl/Cmd + Shift + L`             |
+| ヘルプ表示                  | `Ctrl/Cmd + H`                     |
+| プレビューを閉じる          | `Esc`                              |
+| プレビューでダウンロード           | `Enter` (プレビュー表示中) |
+| フィルタリセット           | `Ctrl/Cmd + Shift + R` |
 
 ---
 

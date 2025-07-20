@@ -156,6 +156,9 @@ export default function App() {
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
 
+  // refs for latest handlers (used by hotkeys)
+  const handlersRef = useRef({});
+
   // フィルタ条件のみリセット
   const resetFilters = () => {
     const today = DateTime.local().toISODate();
@@ -227,7 +230,7 @@ export default function App() {
       window.removeEventListener("pageshow", restore);
       window.removeEventListener("popstate", onPop);
     };
-  }, []);
+  }, [preview]);
 
   // Persist and push history
   useEffect(() => {
@@ -262,6 +265,78 @@ export default function App() {
       sessionStorage.removeItem("webclass-todo");
     }
   }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
+
+  // Keep latest handlers for hotkeys
+  useEffect(() => {
+    handlersRef.current = {
+      exportCSV,
+      exportICS,
+      exportTodoist,
+      exportPNGTable,
+      exportPNGList,
+      closePreview,
+      confirmDownload,
+      resetFilters,
+    };
+  });
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const h = handlersRef.current;
+      if (e.target.closest('input,textarea,select')) return;
+      if (e.key === 'Escape') {
+        h.closePreview();
+      } else if (e.key === 'Enter' && preview) {
+        e.preventDefault();
+        h.confirmDownload();
+      } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        fileInputRef.current?.click();
+      } else if (e.key === 'c' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.exportCSV();
+      } else if (e.key === 'i' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.exportICS();
+      } else if (e.key === 't' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.exportTodoist();
+      } else if (e.key === 'p' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.exportPNGTable(false);
+      } else if (e.key === 'l' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.exportPNGList();
+      } else if (e.key === 'r' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        h.resetFilters();
+      } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        window.open('./usage.html', '_blank');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [preview]);
+
+  // Global error handling
+  useEffect(() => {
+    const onError = (e) => {
+      console.error('Unhandled error:', e.error || e);
+      alert('エラーが発生しました: ' + (e.error?.message || e.message));
+    };
+    const onRejection = (e) => {
+      console.error('Unhandled promise rejection:', e.reason);
+      alert('エラーが発生しました: ' + e.reason);
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
 
   // File upload parsing
   const handleFile = (e) => {
@@ -397,16 +472,22 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const csv = Papa.unparse(filtered, {
-      columns: ["締切", "教材", "コース名", "状態"],
-    });
-    const blob = new Blob([csv], { type: "text/csv" });
-    openPreview(blob, "todo_filtered.csv", "text/csv");
+    try {
+      const csv = Papa.unparse(filtered, {
+        columns: ["締切", "教材", "コース名", "状態"],
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      openPreview(blob, "todo_filtered.csv", "text/csv");
+    } catch (e) {
+      console.error(e);
+      alert("CSV の生成に失敗しました");
+    }
   };
 
   const exportICS = () => {
     if (!filtered.length) return;
-    const lines = [
+    try {
+      const lines = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
       "PRODID:-//WebClass ToDo//JP",
@@ -422,34 +503,43 @@ export default function App() {
       "END:STANDARD",
       "END:VTIMEZONE",
     ];
-    const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
-    filtered.forEach((r) => {
-      const dt = r.締切.setZone("Asia/Tokyo");
-      const dtStr = dt.toFormat("yyyyMMdd'T'HHmmss");
-      lines.push(
-        "BEGIN:VEVENT",
-        `UID:${uuidv4()}@webclass`,
-        `DTSTAMP:${now}`,
-        `DTSTART;TZID=Asia/Tokyo:${dtStr}`,
-        `SUMMARY:${r.教材} (${r.コース名})`,
-        "END:VEVENT",
-      );
-    });
-    lines.push("END:VCALENDAR");
-    downloadBlob(lines.join("\r\n"), "webclass_todo.ics", "text/calendar");
+      const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
+      filtered.forEach((r) => {
+        const dt = r.締切.setZone("Asia/Tokyo");
+        const dtStr = dt.toFormat("yyyyMMdd'T'HHmmss");
+        lines.push(
+          "BEGIN:VEVENT",
+          `UID:${uuidv4()}@webclass`,
+          `DTSTAMP:${now}`,
+          `DTSTART;TZID=Asia/Tokyo:${dtStr}`,
+          `SUMMARY:${r.教材} (${r.コース名})`,
+          "END:VEVENT",
+        );
+      });
+      lines.push("END:VCALENDAR");
+      downloadBlob(lines.join("\r\n"), "webclass_todo.ics", "text/calendar");
+    } catch (e) {
+      console.error(e);
+      alert("iCalendar の生成に失敗しました");
+    }
   };
 
   const exportTodoist = () => {
-    const recs = filtered.map((r) => ({
-      TYPE: "task",
-      CONTENT: `${r.教材} (${r.コース名})`,
-      DATE: r.締切.toFormat("yyyy-MM-dd HH:mm"),
-      DATE_LANG: "ja",
-      TIMEZONE: "Asia/Tokyo",
-    }));
-    const csv = Papa.unparse(recs);
-    const blob = new Blob([csv], { type: "text/csv" });
-    openPreview(blob, "todoist_template.csv", "text/csv");
+    try {
+      const recs = filtered.map((r) => ({
+        TYPE: "task",
+        CONTENT: `${r.教材} (${r.コース名})`,
+        DATE: r.締切.toFormat("yyyy-MM-dd HH:mm"),
+        DATE_LANG: "ja",
+        TIMEZONE: "Asia/Tokyo",
+      }));
+      const csv = Papa.unparse(recs);
+      const blob = new Blob([csv], { type: "text/csv" });
+      openPreview(blob, "todoist_template.csv", "text/csv");
+    } catch (e) {
+      console.error(e);
+      alert("Todoist CSV の生成に失敗しました");
+    }
   };
 
   const exportPNGList = () => {
@@ -466,25 +556,30 @@ export default function App() {
   };
 
   const shareToReminders = () => {
-    if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
-    const { error, value } = createEvents({
-      events: filtered.map((r) => ({
-        start: [
-          r.締切.year,
-          r.締切.month,
-          r.締切.day,
-          r.締切.hour,
-          r.締切.minute,
-        ],
-        title: `${r.教材} (${r.コース名})`,
-      })),
-    });
-    if (!error) {
-      const file = new File(
-        [new Blob([value], { type: "text/calendar" })],
-        "webclass_todo.ics",
-      );
-      navigator.share({ files: [file], title: "WebClass To-Do" });
+    try {
+      if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
+      const { error, value } = createEvents({
+        events: filtered.map((r) => ({
+          start: [
+            r.締切.year,
+            r.締切.month,
+            r.締切.day,
+            r.締切.hour,
+            r.締切.minute,
+          ],
+          title: `${r.教材} (${r.コース名})`,
+        })),
+      });
+      if (!error) {
+        const file = new File(
+          [new Blob([value], { type: "text/calendar" })],
+          "webclass_todo.ics",
+        );
+        navigator.share({ files: [file], title: "WebClass To-Do" });
+      }
+    } catch (e) {
+      console.error(e);
+      alert("共有に失敗しました");
     }
   };
 
