@@ -71,9 +71,9 @@
     background: #2a2a2a;
   }
 
-  .mobile-container > div {
-    background: #1a1a1a !important;
-    border-color: #333333 !important;
+  .list-item {
+    background: #1a1a1a;
+    border-color: #333333;
     color: #e0e0e0;
   }
 }
@@ -352,6 +352,54 @@ button.primary:hover {
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+
+/* ---------------- Mobile list ---------------- */
+.list-container {
+  display: none;
+  width: 100%;
+}
+
+.list-date {
+  font-weight: 600;
+  margin: 1rem 0 0.25rem;
+}
+
+.list-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.list-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+
+.list-meta {
+  font-size: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .table-container {
+    display: none;
+  }
+  .list-container {
+    display: block;
+  }
+}
+
+@media (min-width: 768px) {
+  .list-container {
+    display: none;
+  }
 }
 
 .table-container table {
