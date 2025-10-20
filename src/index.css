@@ -357,6 +357,46 @@ button.primary:hover {
   background: var(--primary-dim);
 }
 
+.reminder-btn {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  border-radius: 999px;
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.reminder-btn:hover {
+  background: var(--primary-dim);
+  border-color: var(--primary-dim);
+  color: #fff;
+}
+
+.reminder-btn:disabled {
+  background: var(--border);
+  border-color: var(--border);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.list-meta .reminder-btn {
+  margin-left: auto;
+}
+
+.reminder-note {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: -0.5rem 0 var(--gap);
+}
+
 /* ---------------- Table ---------------- */
 .table-container {
   width: 100%;
