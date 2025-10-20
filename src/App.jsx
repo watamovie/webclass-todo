@@ -1,13 +1,14 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
-import { createEvents } from "ics";
 // import domtoimage from 'dom-to-image';
 import html2canvas from "html2canvas";
 
 const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
 const DEFAULT_SPAN_DAYS = 7; // 期間
+const REMINDER_SORT_FIELDS = ["締切", "教材", "コース名", "状態"];
+const COMPLETED_STATUS_KEYWORDS = ["合格", "実施済", "完了"];
 
 function useDefaultFilters() {
   const [days, setDays] = useState(DEFAULT_SPAN_DAYS);
@@ -141,6 +142,11 @@ export default function App() {
   const [keyword, setKeyword] = useState("");
   const [sortField, setSortField] = useState("締切");
   const [sortAsc, setSortAsc] = useState(true);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderSortField, setReminderSortField] = useState("締切");
+  const [reminderSortAsc, setReminderSortAsc] = useState(true);
+  const [reminderStatuses, setReminderStatuses] = useState([]);
+  const [isSharingReminders, setIsSharingReminders] = useState(false);
 
   // Filter accordion open state (desktop open by default)
   const [isFilterOpen, setIsFilterOpen] = useState(
@@ -230,7 +236,7 @@ export default function App() {
       window.removeEventListener("pageshow", restore);
       window.removeEventListener("popstate", onPop);
     };
-  }, [preview]);
+  }, [preview, isReminderModalOpen]);
 
   // Persist and push history
   useEffect(() => {
@@ -275,6 +281,7 @@ export default function App() {
       exportPNGTable,
       exportPNGList,
       closePreview,
+      closeReminderModal,
       confirmDownload,
       resetFilters,
     };
@@ -286,7 +293,11 @@ export default function App() {
       const h = handlersRef.current;
       if (e.target.closest('input,textarea,select')) return;
       if (e.key === 'Escape') {
-        h.closePreview();
+        if (isReminderModalOpen) {
+          h.closeReminderModal();
+        } else {
+          h.closePreview();
+        }
       } else if (e.key === 'Enter' && preview) {
         e.preventDefault();
         h.confirmDownload();
@@ -420,6 +431,30 @@ export default function App() {
       if (va > vb) return sortAsc ? 1 : -1;
       return 0;
     });
+
+  const reminderStatusOptions = useMemo(
+    () => Array.from(new Set(filtered.map((r) => r.状態 ?? ""))),
+    [filtered],
+  );
+
+  const reminderPreviewItems = useMemo(() => {
+    const base =
+      reminderStatuses.length === 0
+        ? []
+        : filtered.filter((r) => reminderStatuses.includes(r.状態));
+    const sorted = [...base].sort((a, b) => {
+      const getValue = (item) =>
+        reminderSortField === "締切"
+          ? item.締切.toMillis()
+          : item[reminderSortField] || "";
+      const va = getValue(a);
+      const vb = getValue(b);
+      if (va < vb) return reminderSortAsc ? -1 : 1;
+      if (va > vb) return reminderSortAsc ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filtered, reminderStatuses, reminderSortField, reminderSortAsc]);
 
   const nextDeadline = filtered.reduce((min, r) => {
     if (!min || r.締切 < min) return r.締切;
@@ -555,31 +590,105 @@ export default function App() {
     captureAndPreview(wrapper, name, openPreview);
   };
 
-  const shareToReminders = () => {
+  const shareToReminders = async (items) => {
+    if (!items.length) {
+      alert("リマインダーに追加する項目がありません。");
+      return false;
+    }
+
     try {
-      if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
-      const { error, value } = createEvents({
-        events: filtered.map((r) => ({
-          start: [
-            r.締切.year,
-            r.締切.month,
-            r.締切.day,
-            r.締切.hour,
-            r.締切.minute,
-          ],
-          title: `${r.教材} (${r.コース名})`,
-        })),
-      });
-      if (!error) {
-        const file = new File(
-          [new Blob([value], { type: "text/calendar" })],
-          "webclass_todo.ics",
+      const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
+      const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//WebClass To-Do//JP",
+        "CALSCALE:GREGORIAN",
+        "X-WR-CALNAME:WebClass To-Do",
+        "X-WR-TIMEZONE:Asia/Tokyo",
+      ];
+
+      items.forEach((r) => {
+        const due = r.締切.setZone("Asia/Tokyo");
+        const dueStr = due.toFormat("yyyyMMdd'T'HHmmss");
+        lines.push(
+          "BEGIN:VTODO",
+          `UID:${uuidv4()}@webclass`,
+          `DTSTAMP:${now}`,
+          `DUE;TZID=Asia/Tokyo:${dueStr}`,
+          `SUMMARY:${r.教材} (${r.コース名})`,
+          "STATUS:NEEDS-ACTION",
+          r.状態 ? `CATEGORIES:${r.状態}` : null,
+          "END:VTODO",
         );
-        navigator.share({ files: [file], title: "WebClass To-Do" });
+      });
+
+      lines.push("END:VCALENDAR");
+
+      const content = lines.filter(Boolean).join("\r\n");
+      const fileName = "webclass_todo_reminders.ics";
+
+      if (
+        typeof navigator !== "undefined" &&
+        typeof File !== "undefined"
+      ) {
+        const file = new File([content], fileName, { type: "text/calendar" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "WebClass To-Do",
+            text: `${items.length}件の課題をリマインダーに追加`,
+          });
+          return true;
+        }
       }
+
+      downloadBlob(content, fileName, "text/calendar");
+      alert(
+        "端末が直接共有に対応していないため、.ics ファイルをダウンロードしました。iPhoneで開くとリマインダーに追加できます。",
+      );
+      return true;
     } catch (e) {
       console.error(e);
-      alert("共有に失敗しました");
+      alert("リマインダーの共有に失敗しました");
+      return false;
+    }
+  };
+
+  const openReminderModal = () => {
+    const defaultStatuses = reminderStatusOptions.filter(
+      (status) =>
+        !COMPLETED_STATUS_KEYWORDS.some((keyword) =>
+          typeof status === "string" ? status.includes(keyword) : false,
+        ),
+    );
+
+    setReminderSortField(sortField);
+    setReminderSortAsc(sortAsc);
+    if (defaultStatuses.length) {
+      setReminderStatuses([...defaultStatuses]);
+    } else {
+      setReminderStatuses([...reminderStatusOptions]);
+    }
+    setIsReminderModalOpen(true);
+  };
+
+  const closeReminderModal = () => {
+    if (isSharingReminders) return;
+    setIsReminderModalOpen(false);
+  };
+
+  const handleReminderConfirm = async () => {
+    if (isSharingReminders) return;
+    if (!reminderPreviewItems.length) {
+      alert("追加対象の項目がありません。");
+      return;
+    }
+
+    setIsSharingReminders(true);
+    const shared = await shareToReminders(reminderPreviewItems);
+    setIsSharingReminders(false);
+    if (shared) {
+      setIsReminderModalOpen(false);
     }
   };
 
@@ -787,6 +896,13 @@ export default function App() {
                 </table>
               </div>
               <div className="button-group">
+                <button
+                  onClick={openReminderModal}
+                  className="primary"
+                  type="button"
+                >
+                  📱 リマインダーに一括追加
+                </button>
                 <button onClick={exportCSV}>CSV ダウンロード</button>
                 <button onClick={exportICS}>
                   iCalendar (.ics) ダウンロード
@@ -828,6 +944,142 @@ export default function App() {
           </>
         )}
       </div>
+      {isReminderModalOpen && (
+        <div className="modal-overlay" onClick={closeReminderModal}>
+          <div
+            className="modal reminder-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>リマインダーに一括追加</h2>
+            <p className="reminder-description">
+              追加する課題の並び替えと状態を確認してから iPhone のリマインダーへ送信します。
+            </p>
+            <div className="reminder-options">
+              <label>
+                ソート対象:
+                <select
+                  value={reminderSortField}
+                  onChange={(e) => setReminderSortField(e.target.value)}
+                >
+                  {REMINDER_SORT_FIELDS.map((field) => (
+                    <option key={field} value={field}>
+                      {field}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                並び順:
+                <select
+                  value={reminderSortAsc ? "asc" : "desc"}
+                  onChange={(e) => setReminderSortAsc(e.target.value === "asc")}
+                >
+                  <option value="asc">昇順</option>
+                  <option value="desc">降順</option>
+                </select>
+              </label>
+            </div>
+            <div className="reminder-statuses">
+              <span>追加する状態:</span>
+              <div className="status-list">
+                {reminderStatusOptions.length === 0 ? (
+                  <span className="status-empty">状態の情報がありません。</span>
+                ) : (
+                  reminderStatusOptions.map((status, index) => (
+                    <label
+                      key={`${status || "__empty"}-${index}`}
+                      className="status-item"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={reminderStatuses.includes(status)}
+                        onChange={(e) => {
+                          setReminderStatuses((prev) => {
+                            if (!e.target.checked) {
+                              return prev.filter((s) => s !== status);
+                            }
+                            const next = new Set(prev);
+                            next.add(status);
+                            return Array.from(next);
+                          });
+                        }}
+                      />
+                      <span>{status || "（状態なし）"}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              {reminderStatusOptions.length > 0 && (
+                <div className="status-actions">
+                  <button
+                    type="button"
+                    onClick={() => setReminderStatuses([...reminderStatusOptions])}
+                  >
+                    すべて選択
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReminderStatuses(
+                        reminderStatusOptions.filter(
+                          (status) =>
+                            !COMPLETED_STATUS_KEYWORDS.some((keyword) =>
+                              typeof status === "string"
+                                ? status.includes(keyword)
+                                : false,
+                            ),
+                        ),
+                      )
+                    }
+                  >
+                    合格・実施済みを除外
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="reminder-preview">
+              <h3>
+                追加予定の課題: {reminderPreviewItems.length}件
+              </h3>
+              <div className="reminder-preview-list">
+                {reminderPreviewItems.length === 0 ? (
+                  <p className="reminder-empty">該当する課題がありません。</p>
+                ) : (
+                  <ol>
+                    {reminderPreviewItems.map((item, index) => (
+                      <li key={`${item.教材}-${item.締切.toISO()}-${index}`}>
+                        <div className="preview-title">{item.教材}</div>
+                        <div className="preview-meta">
+                          <span>{item.締切.toFormat("yyyy-MM-dd HH:mm")}</span>
+                          <span>{item.コース名}</span>
+                          <span>{item.状態}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={handleReminderConfirm}
+                disabled={isSharingReminders || reminderPreviewItems.length === 0}
+              >
+                {isSharingReminders ? "追加中..." : "決定して追加"}
+              </button>
+              <button
+                type="button"
+                onClick={closeReminderModal}
+                disabled={isSharingReminders}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {preview && (
         <div className="modal-overlay" onClick={closePreview}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
