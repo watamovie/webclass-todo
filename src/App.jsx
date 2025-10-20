@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
@@ -158,6 +158,11 @@ export default function App() {
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
+
+  const isiOS = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return /iP(hone|od|ad)/i.test(navigator.userAgent);
+  }, []);
 
   // フィルタ条件のみリセット
   const resetFilters = () => {
@@ -462,6 +467,37 @@ export default function App() {
     }
   };
 
+  const buildReminderURL = useCallback((item) => {
+    const params = new URLSearchParams();
+    const title = item.教材?.trim() ? item.教材.trim() : "WebClass 課題";
+    params.set("title", title);
+    const notes = [
+      item.コース名 && `コース: ${item.コース名}`,
+      item.状態 && `状態: ${item.状態}`,
+      `締切: ${item.締切.setZone("Asia/Tokyo").toFormat("yyyy-MM-dd HH:mm")}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    if (notes) params.set("notes", notes);
+    params.set(
+      "dueDate",
+      item.締切
+        .setZone("Asia/Tokyo")
+        .toISO({ suppressMilliseconds: true, includeOffset: true }),
+    );
+    return `x-apple-reminder://new?${params.toString()}`;
+  }, []);
+
+  const handleReminderClick = useCallback(
+    (item) => {
+      const url = buildReminderURL(item);
+      if (isiOS) {
+        window.location.href = url;
+      }
+    },
+    [buildReminderURL, isiOS],
+  );
+
   const handleSort = (field) => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
@@ -764,12 +800,13 @@ export default function App() {
                           <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
                         )}
                       </th>
+                      <th>リマインダー</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: "center" }}>
+                        <td colSpan={5} style={{ textAlign: "center" }}>
                           該当するデータがありません
                         </td>
                       </tr>
@@ -780,6 +817,21 @@ export default function App() {
                           <td>{r.教材}</td>
                           <td>{r.コース名}</td>
                           <td>{r.状態}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="reminder-btn"
+                              onClick={() => handleReminderClick(r)}
+                              disabled={!isiOS}
+                              title={
+                                isiOS
+                                  ? "iPhoneのリマインダーに追加"
+                                  : "iPhoneのSafariで利用できます"
+                              }
+                            >
+                              追加
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -799,6 +851,11 @@ export default function App() {
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
               </div>
+              {!isiOS && (
+                <p className="reminder-note">
+                  ※ 「リマインダー追加」ボタンは iPhone の Safari でご利用ください。
+                </p>
+              )}
               <div className="list-container">
                 {Object.entries(
                   filtered.reduce((acc, r) => {
@@ -818,6 +875,19 @@ export default function App() {
                             <span>{r.締切.toFormat("HH:mm")}</span>
                             <span>{r.コース名}</span>
                             <span>{r.状態}</span>
+                            <button
+                              type="button"
+                              className="reminder-btn"
+                              onClick={() => handleReminderClick(r)}
+                              disabled={!isiOS}
+                              title={
+                                isiOS
+                                  ? "iPhoneのリマインダーに追加"
+                                  : "iPhoneのSafariで利用できます"
+                              }
+                            >
+                              追加
+                            </button>
                           </div>
                         </div>
                       ))}
