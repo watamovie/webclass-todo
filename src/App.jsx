@@ -141,6 +141,7 @@ export default function App() {
   const [keyword, setKeyword] = useState("");
   const [sortField, setSortField] = useState("締切");
   const [sortAsc, setSortAsc] = useState(true);
+  const [isReminderSupported, setIsReminderSupported] = useState(false);
 
   // Filter accordion open state (desktop open by default)
   const [isFilterOpen, setIsFilterOpen] = useState(
@@ -178,6 +179,17 @@ export default function App() {
     const sd = DateTime.fromISO(startDate);
     setEndDate(sd.plus({ days: daysFilter }).toISODate());
   }, [startDate, daysFilter]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    const ua = navigator.userAgent || navigator.vendor || "";
+    const isiOS = /iP(hone|ad|od)/.test(ua);
+    const isTouchMac =
+      /Macintosh/.test(ua) &&
+      navigator.maxTouchPoints &&
+      navigator.maxTouchPoints > 1;
+    setIsReminderSupported(Boolean(isiOS || isTouchMac));
+  }, []);
 
   const prevStateRef = useRef(null);
 
@@ -264,7 +276,16 @@ export default function App() {
     } else {
       sessionStorage.removeItem("webclass-todo");
     }
-  }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
+  }, [
+    data,
+    daysFilter,
+    startDate,
+    endDate,
+    statuses,
+    keyword,
+    sortField,
+    sortAsc,
+  ]);
 
   // Keep latest handlers for hotkeys
   useEffect(() => {
@@ -284,57 +305,57 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e) => {
       const h = handlersRef.current;
-      if (e.target.closest('input,textarea,select')) return;
-      if (e.key === 'Escape') {
+      if (e.target.closest("input,textarea,select")) return;
+      if (e.key === "Escape") {
         h.closePreview();
-      } else if (e.key === 'Enter' && preview) {
+      } else if (e.key === "Enter" && preview) {
         e.preventDefault();
         h.confirmDownload();
-      } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "o" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         fileInputRef.current?.click();
-      } else if (e.key === 'c' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "c" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportCSV();
-      } else if (e.key === 'i' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "i" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportICS();
-      } else if (e.key === 't' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "t" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportTodoist();
-      } else if (e.key === 'p' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "p" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportPNGTable(false);
-      } else if (e.key === 'l' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "l" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.exportPNGList();
-      } else if (e.key === 'r' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "r" && e.shiftKey && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         h.resetFilters();
-      } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
+      } else if (e.key === "h" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        window.open('./usage.html', '_blank');
+        window.open("./usage.html", "_blank");
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [preview]);
 
   // Global error handling
   useEffect(() => {
     const onError = (e) => {
-      console.error('Unhandled error:', e.error || e);
-      alert('エラーが発生しました: ' + (e.error?.message || e.message));
+      console.error("Unhandled error:", e.error || e);
+      alert("エラーが発生しました: " + (e.error?.message || e.message));
     };
     const onRejection = (e) => {
-      console.error('Unhandled promise rejection:', e.reason);
-      alert('エラーが発生しました: ' + e.reason);
+      console.error("Unhandled promise rejection:", e.reason);
+      alert("エラーが発生しました: " + e.reason);
     };
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
     return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
     };
   }, []);
 
@@ -412,10 +433,8 @@ export default function App() {
         !keyword || r.教材.includes(keyword) || r.コース名.includes(keyword),
     )
     .sort((a, b) => {
-      const va =
-        sortField === "締切" ? a.締切.toMillis() : a[sortField] || "";
-      const vb =
-        sortField === "締切" ? b.締切.toMillis() : b[sortField] || "";
+      const va = sortField === "締切" ? a.締切.toMillis() : a[sortField] || "";
+      const vb = sortField === "締切" ? b.締切.toMillis() : b[sortField] || "";
       if (va < vb) return sortAsc ? -1 : 1;
       if (va > vb) return sortAsc ? 1 : -1;
       return 0;
@@ -471,6 +490,32 @@ export default function App() {
     }
   };
 
+  const buildReminderURL = (item) => {
+    const params = new URLSearchParams();
+    const title = item.教材?.trim() || "Untitled";
+    params.set("title", title);
+    const notesParts = [item.コース名, item.状態].filter(Boolean);
+    if (notesParts.length) {
+      params.set("notes", notesParts.join(" / "));
+    }
+    if (item.締切?.isValid) {
+      const due = item.締切.toUTC().toFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+      params.set("dueDate", due);
+    }
+    return `x-apple-reminderkit://REMCDAddReminder/?${params.toString()}`;
+  };
+
+  const openInReminders = (item) => {
+    if (!isReminderSupported) {
+      alert(
+        "iPhone / iPad のリマインダーアプリでのみ利用できます。Safari でこのページを開いてください。",
+      );
+      return;
+    }
+    const url = buildReminderURL(item);
+    window.location.href = url;
+  };
+
   const exportCSV = () => {
     try {
       const csv = Papa.unparse(filtered, {
@@ -488,21 +533,21 @@ export default function App() {
     if (!filtered.length) return;
     try {
       const lines = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//WebClass ToDo//JP",
-      "CALSCALE:GREGORIAN",
-      "X-WR-TIMEZONE:Asia/Tokyo",
-      "BEGIN:VTIMEZONE",
-      "TZID:Asia/Tokyo",
-      "BEGIN:STANDARD",
-      "TZOFFSETFROM:+0900",
-      "TZOFFSETTO:+0900",
-      "TZNAME:JST",
-      "DTSTART:19700101T000000",
-      "END:STANDARD",
-      "END:VTIMEZONE",
-    ];
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//WebClass ToDo//JP",
+        "CALSCALE:GREGORIAN",
+        "X-WR-TIMEZONE:Asia/Tokyo",
+        "BEGIN:VTIMEZONE",
+        "TZID:Asia/Tokyo",
+        "BEGIN:STANDARD",
+        "TZOFFSETFROM:+0900",
+        "TZOFFSETTO:+0900",
+        "TZNAME:JST",
+        "DTSTART:19700101T000000",
+        "END:STANDARD",
+        "END:VTIMEZONE",
+      ];
       const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
       filtered.forEach((r) => {
         const dt = r.締切.setZone("Asia/Tokyo");
@@ -592,15 +637,20 @@ export default function App() {
 
     sessionStorage.removeItem("webclass-todo");
 
-    const state = { data: [], filters: {
-      days: DEFAULT_SPAN_DAYS,
-      startDate: TODAY,
-      endDate: DateTime.fromISO(TODAY).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-      statuses: [],
-      keyword: "",
-      sortField: "締切",
-      sortAsc: true,
-    }};
+    const state = {
+      data: [],
+      filters: {
+        days: DEFAULT_SPAN_DAYS,
+        startDate: TODAY,
+        endDate: DateTime.fromISO(TODAY)
+          .plus({ days: DEFAULT_SPAN_DAYS })
+          .toISODate(),
+        statuses: [],
+        keyword: "",
+        sortField: "締切",
+        sortAsc: true,
+      },
+    };
     window.history.replaceState(state, "");
     prevStateRef.current = JSON.stringify(state);
 
@@ -614,7 +664,9 @@ export default function App() {
     <>
       <div className="container">
         <header>
-          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>📋 WebClass To-Do</h1>
+          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>
+            📋 WebClass To-Do
+          </h1>
           {/* ファイル解除ボタンはデータ読み込み後だけ表示 */}
           {data.length > 0 && (
             <button onClick={clearFile} style={{ marginLeft: "1rem" }}>
@@ -632,7 +684,12 @@ export default function App() {
             />
             <p>課題実施状況一覧のCSVを選択してください。</p>
             <p>
-              <a href="./usage.html" target="_blank" rel="noopener" className="button">
+              <a
+                href="./usage.html"
+                target="_blank"
+                rel="noopener"
+                className="button"
+              >
                 使い方を見る
               </a>
             </p>
@@ -731,6 +788,11 @@ export default function App() {
                 {nextDeadline && (
                   <span>次の締切: {nextDeadline.toFormat("yyyy-MM-dd")}</span>
                 )}
+                {!isReminderSupported && (
+                  <span className="reminder-hint">
+                    リマインダー追加は iPhone / iPad の Safari でご利用ください
+                  </span>
+                )}
               </div>
               <div
                 className="table-container"
@@ -740,36 +802,49 @@ export default function App() {
                 <table style={{ fontSize: "0.875rem", lineHeight: "1.4" }}>
                   <thead>
                     <tr>
-                      <th onClick={() => handleSort("締切")} className="sortable">
+                      <th
+                        onClick={() => handleSort("締切")}
+                        className="sortable"
+                      >
                         締切
                         {sortField === "締切" && (
                           <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
                         )}
                       </th>
-                      <th onClick={() => handleSort("教材")} className="sortable">
+                      <th
+                        onClick={() => handleSort("教材")}
+                        className="sortable"
+                      >
                         教材
                         {sortField === "教材" && (
                           <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
                         )}
                       </th>
-                      <th onClick={() => handleSort("コース名")} className="sortable">
+                      <th
+                        onClick={() => handleSort("コース名")}
+                        className="sortable"
+                      >
                         コース名
                         {sortField === "コース名" && (
                           <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
                         )}
                       </th>
-                      <th onClick={() => handleSort("状態")} className="sortable">
+                      <th
+                        onClick={() => handleSort("状態")}
+                        className="sortable"
+                      >
                         状態
                         {sortField === "状態" && (
                           <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
                         )}
                       </th>
+                      <th>リマインダー</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={4} style={{ textAlign: "center" }}>
+                        <td colSpan={5} style={{ textAlign: "center" }}>
                           該当するデータがありません
                         </td>
                       </tr>
@@ -780,6 +855,20 @@ export default function App() {
                           <td>{r.教材}</td>
                           <td>{r.コース名}</td>
                           <td>{r.状態}</td>
+                          <td>
+                            <button
+                              className="reminder-button"
+                              onClick={() => openInReminders(r)}
+                              disabled={!isReminderSupported}
+                              title={
+                                isReminderSupported
+                                  ? "リマインダーに追加"
+                                  : "iPhone / iPad の Safari でご利用ください"
+                              }
+                            >
+                              追加
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -805,7 +894,7 @@ export default function App() {
                     const d = r.締切.toFormat("yyyy-MM-dd");
                     acc[d] = acc[d] ? [...acc[d], r] : [r];
                     return acc;
-                  }, {})
+                  }, {}),
                 )
                   .sort(([a], [b]) => (a < b ? -1 : 1))
                   .map(([date, rows]) => (
@@ -818,6 +907,20 @@ export default function App() {
                             <span>{r.締切.toFormat("HH:mm")}</span>
                             <span>{r.コース名}</span>
                             <span>{r.状態}</span>
+                          </div>
+                          <div className="list-actions">
+                            <button
+                              className="reminder-button"
+                              onClick={() => openInReminders(r)}
+                              disabled={!isReminderSupported}
+                              title={
+                                isReminderSupported
+                                  ? "リマインダーに追加"
+                                  : "iPhone / iPad の Safari でご利用ください"
+                              }
+                            >
+                              リマインダーに追加
+                            </button>
                           </div>
                         </div>
                       ))}
