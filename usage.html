@@ -1,26 +1,37 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>使い方 - WebClass To-Do</title>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9164055896922854" crossorigin="anonymous"></script>
-  <!-- Use relative path so it works in production -->
-  <link rel="stylesheet" href="./src/index.css" />
-</head>
-<body>
-  <header style="padding: 1rem; text-align: center;">
-    <h1>📋 WebClass To-Do の使い方</h1>
-  </header>
-  <main style="max-width: 800px; margin: auto; padding: 1rem; line-height: 1.6;">
-    <ol>
-      <li>WebClass から「課題実施状況一覧」を CSV 形式でダウンロードします。</li>
-      <li>トップページでその CSV ファイルを選択します。</li>
-      <li>必要に応じて期間やキーワードなどの条件を設定します。</li>
-      <li>表示された一覧を各種フォーマットでエクスポートできます。</li>
-    </ol>
-    <p>ブラウザだけで動作するので、インストールは不要です。</p>
-    <p><a href="index.html">トップへ戻る</a></p>
-  </main>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>使い方 - SVG 寸法アノテーション</title>
+    <link rel="stylesheet" href="./src/index.css" />
+  </head>
+  <body>
+    <main class="app" style="max-width: 860px; margin: 0 auto;">
+      <header class="app-header" style="margin-bottom: 1.5rem;">
+        <h1>SVG 寸法アノテーションの使い方</h1>
+        <p>
+          SVG の寸法線を素早く整えるための補助ツールです。背景色は SVG 内の色から自動抽出し、工業図面風の矢印と数値を重ねてプレビューできます。
+        </p>
+      </header>
+      <section class="panel">
+        <h2 class="panel-title">基本操作</h2>
+        <ol style="margin: 0; padding-left: 1.2rem; line-height: 1.8;">
+          <li>「SVG ファイルを読み込む」から SVG を選択するか、テキストエリアへ SVG コードを貼り付けます。</li>
+          <li>幅・高さ・単位の入力値を調整します。単位を変更しても数値は保持されます。</li>
+          <li>必要に応じて、アスペクト比の固定や背景透過、寸法ラベル、寸法値の丸めを切り替えます。</li>
+          <li>プレビューで工業図面風の寸法線と数値を確認し、SVG 側を調整してください。</li>
+        </ol>
+      </section>
+      <section class="panel">
+        <h2 class="panel-title">ヒント</h2>
+        <ul style="margin: 0; padding-left: 1.2rem; line-height: 1.8;">
+          <li>背景色は SVG の塗り／線の色から自動的に無彩色を選択します。背景を透過に切り替えることも可能です。</li>
+          <li>寸法線は工業図面の矢印形状で描画され、数値は矢印の真上に表示されます。</li>
+          <li>縦方向の寸法値は読みやすい向きになるよう、文字を回転して配置しています。</li>
+        </ul>
+      </section>
+      <p class="helper" style="margin-top: 2rem;">アプリに戻るには <a href="index.html">こちら</a> をクリックしてください。</p>
+    </main>
+  </body>
 </html>
