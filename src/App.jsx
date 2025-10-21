@@ -1,885 +1,683 @@
-import React, { useState, useRef, useEffect } from "react";
-import Papa from "papaparse";
-import { DateTime } from "luxon";
-import { v4 as uuidv4 } from "uuid";
-import { createEvents } from "ics";
-// import domtoimage from 'dom-to-image';
-import html2canvas from "html2canvas";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
-const DEFAULT_SPAN_DAYS = 7; // 期間
+const DEFAULT_SVG = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="320" height="180" viewBox="0 0 320 180" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="180" rx="20" fill="#2870B4" />
+  <circle cx="84" cy="92" r="38" fill="#F2C744" />
+  <path d="M142 56h146l-26 99H162z" fill="#F8F9FB" />
+  <path d="M208 88c14 0 26 12 26 26s-12 26-26 26-26-12-26-26 12-26 26-26z" fill="#26303B" />
+  <text x="56" y="107" font-family="'Noto Sans JP', sans-serif" font-size="28" fill="#1F2428" font-weight="600">Sample</text>
+</svg>`;
 
-function useDefaultFilters() {
-  const [days, setDays] = useState(DEFAULT_SPAN_DAYS);
-  const [startDate, setStartDate] = useState(TODAY);
-  const [endDate, setEndDate] = useState(
-    DateTime.local().plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-  );
-  const [keyword, setKeyword] = useState("");
-  const [statusOpt, setStatusOpt] = useState([]);
-
-  /** 条件をデフォルトへ戻す */
-  const resetFilters = () => {
-    setDays(DEFAULT_SPAN_DAYS);
-    setStartDate(TODAY);
-    setEndDate(DateTime.local().plus({ days: DEFAULT_SPAN_DAYS }).toISODate());
-    setKeyword("");
-    setStatusOpt([]);
-  };
-
-  return {
-    days,
-    startDate,
-    endDate,
-    keyword,
-    statusOpt,
-    setDays,
-    setStartDate,
-    setEndDate,
-    setKeyword,
-    setStatusOpt,
-    resetFilters,
-  };
-}
-
-function downloadBlob(data, fileName, mimeType) {
-  const blob = new Blob([data], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// ------ Image helper utilities ------
-const getThemeColors = () => {
-  const styles = getComputedStyle(document.documentElement);
-  return {
-    bg: styles.getPropertyValue("--bg").trim() || "#ffffff",
-    surface: styles.getPropertyValue("--surface").trim() || "#ffffff",
-    border: styles.getPropertyValue("--border").trim() || "#ddd",
-    text: styles.getPropertyValue("--text").trim() || "#000",
-  };
+const DEFAULT_OPTIONS = {
+  unit: "px",
+  maintainAspect: true,
+  backgroundTransparent: false,
+  showDimensionLines: true,
+  showDimensionLabels: false,
+  roundDimensionValues: false,
 };
 
-const buildImageWrapper = (isMobile, filtered, tableRef) => {
-  const { bg, surface, border, text } = getThemeColors();
-  const wrapper = document.createElement("div");
-  wrapper.style.backgroundColor = bg;
-  wrapper.style.color = text;
-  wrapper.style.padding = "1rem";
-  if (isMobile) {
-    filtered.forEach((r) => {
-      const card = document.createElement("div");
-      card.style.margin = "0.5rem 0";
-      card.style.padding = "0.75rem";
-      card.style.border = `1px solid ${border}`;
-      card.style.borderRadius = "4px";
-      card.style.background = surface;
-      const fields = [
-        ["締切", r.締切.toFormat("yyyy-MM-dd HH:mm")],
-        ["教材", r.教材],
-        ["コース", r.コース名],
-        ["状態", r.状態],
-      ];
-      fields.forEach(([label, value]) => {
-        const row = document.createElement("div");
-        row.style.marginBottom = "0.25rem";
-        const keyEl = document.createElement("span");
-        keyEl.style.fontWeight = "bold";
-        keyEl.textContent = `${label}: `;
-        const valEl = document.createElement("span");
-        valEl.textContent = value;
-        row.appendChild(keyEl);
-        row.appendChild(valEl);
-        card.appendChild(row);
-      });
-      wrapper.appendChild(card);
-    });
-  } else {
-    const container = tableRef.current;
-    if (!container) return null;
-    const tableEl = container.querySelector("table");
-    if (!tableEl) return null;
-    wrapper.appendChild(tableEl.cloneNode(true));
+const PRECISION_DIGITS = 2;
+const isBrowser = typeof window !== "undefined" && typeof DOMParser !== "undefined";
+
+function parseLength(value) {
+  if (!value) return undefined;
+  const match = String(value).match(/(-?\d*\.?\d+)/);
+  if (!match) return undefined;
+  const num = parseFloat(match[1]);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function parseSvgMeta(svgText) {
+  if (!isBrowser) {
+    return {
+      width: 320,
+      height: 180,
+      viewBox: "0 0 320 180",
+      signature: "",
+      colors: [],
+      error: undefined,
+    };
   }
-  return wrapper;
-};
-
-const captureAndPreview = async (wrapper, name, openPreview) => {
-  if (!wrapper) return;
-  const { bg } = getThemeColors();
-  document.body.appendChild(wrapper);
   try {
-    const canvas = await html2canvas(wrapper, {
-      scale: window.devicePixelRatio || 2,
-      backgroundColor: bg,
-      useCORS: true,
-      width: wrapper.scrollWidth,
-      height: wrapper.scrollHeight,
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const parserError = doc.querySelector("parsererror");
+    if (parserError) {
+      return {
+        width: 320,
+        height: 180,
+        viewBox: "0 0 320 180",
+        signature: "",
+        colors: [],
+        error: parserError.textContent || "SVG の解析に失敗しました",
+      };
+    }
+    const svgEl = doc.documentElement;
+    if (!svgEl || svgEl.tagName.toLowerCase() !== "svg") {
+      return {
+        width: 320,
+        height: 180,
+        viewBox: "0 0 320 180",
+        signature: "",
+        colors: [],
+        error: "SVG ルート要素が見つかりません",
+      };
+    }
+    let width = parseLength(svgEl.getAttribute("width"));
+    let height = parseLength(svgEl.getAttribute("height"));
+    const viewBox = svgEl.getAttribute("viewBox");
+    if ((!width || !height) && viewBox) {
+      const [, , vbWidth, vbHeight] = viewBox
+        .split(/\s+/)
+        .map((part) => parseFloat(part));
+      if (!width && Number.isFinite(vbWidth)) width = vbWidth;
+      if (!height && Number.isFinite(vbHeight)) height = vbHeight;
+    }
+    if (!width) width = 320;
+    if (!height) height = 180;
+    const colorSet = new Set();
+    svgEl.querySelectorAll("*").forEach((el) => {
+      ["fill", "stroke"].forEach((attr) => {
+        const val = el.getAttribute(attr);
+        if (val && val !== "none" && !val.startsWith("url(")) {
+          colorSet.add(val.trim());
+        }
+      });
+      const style = el.getAttribute("style");
+      if (style) {
+        style
+          .split(";")
+          .map((decl) => decl.trim())
+          .forEach((decl) => {
+            if (!decl) return;
+            const [prop, val] = decl.split(":").map((part) => part && part.trim());
+            if (!prop || !val) return;
+            if ((prop === "fill" || prop === "stroke") && val !== "none" && !val.startsWith("url(")) {
+              colorSet.add(val);
+            }
+          });
+      }
     });
-    canvas.toBlob((blob) => openPreview(blob, name, "image/png"), "image/png");
-  } catch (e) {
-    alert(`${name} の生成に失敗しました`);
-  } finally {
-    document.body.removeChild(wrapper);
+    return {
+      width,
+      height,
+      viewBox: viewBox || `0 0 ${width} ${height}`,
+      signature: `${width}|${height}|${viewBox || "-"}`,
+      colors: Array.from(colorSet),
+      error: undefined,
+    };
+  } catch (error) {
+    return {
+      width: 320,
+      height: 180,
+      viewBox: "0 0 320 180",
+      signature: "",
+      colors: [],
+      error: error instanceof Error ? error.message : "SVG 解析中に不明なエラーが発生しました",
+    };
   }
-};
+}
+
+function parseColorToRgb(color) {
+  if (!isBrowser || !color) return undefined;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+  ctx.fillStyle = "#000";
+  ctx.fillStyle = color;
+  const computed = ctx.fillStyle;
+  if (!computed) return undefined;
+  if (computed.startsWith("#")) {
+    const hex = computed.slice(1);
+    if (hex.length === 3) {
+      const r = parseInt(hex[0] + hex[0], 16);
+      const g = parseInt(hex[1] + hex[1], 16);
+      const b = parseInt(hex[2] + hex[2], 16);
+      return { r, g, b };
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return { r, g, b };
+    }
+  }
+  const match = computed.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    return {
+      r: parseInt(match[1], 10),
+      g: parseInt(match[2], 10),
+      b: parseInt(match[3], 10),
+    };
+  }
+  return undefined;
+}
+
+function rgbToHsl(r, g, b) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const delta = max - min;
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+    switch (max) {
+      case rn:
+        h = ((gn - bn) / delta) % 6;
+        break;
+      case gn:
+        h = (bn - rn) / delta + 2;
+        break;
+      default:
+        h = (rn - gn) / delta + 4;
+        break;
+    }
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s, l };
+}
+
+function hslToHex(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let rPrime = 0;
+  let gPrime = 0;
+  let bPrime = 0;
+  if (h >= 0 && h < 60) {
+    rPrime = c;
+    gPrime = x;
+  } else if (h >= 60 && h < 120) {
+    rPrime = x;
+    gPrime = c;
+  } else if (h >= 120 && h < 180) {
+    gPrime = c;
+    bPrime = x;
+  } else if (h >= 180 && h < 240) {
+    gPrime = x;
+    bPrime = c;
+  } else if (h >= 240 && h < 300) {
+    rPrime = x;
+    bPrime = c;
+  } else {
+    rPrime = c;
+    bPrime = x;
+  }
+  const r = Math.round((rPrime + m) * 255);
+  const g = Math.round((gPrime + m) * 255);
+  const b = Math.round((bPrime + m) * 255);
+  const toHex = (value) => value.toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function computeNeutralBackground(colors) {
+  const fallback = { color: "#f5f5f5", lightness: 0.94 };
+  if (!isBrowser || !colors || colors.length === 0) return fallback;
+  const rgbs = colors
+    .map((color) => parseColorToRgb(color))
+    .filter((value) => value);
+  if (!rgbs.length) return fallback;
+  const sum = rgbs.reduce(
+    (acc, rgb) => ({ r: acc.r + rgb.r, g: acc.g + rgb.g, b: acc.b + rgb.b }),
+    { r: 0, g: 0, b: 0 },
+  );
+  const mean = { r: sum.r / rgbs.length, g: sum.g / rgbs.length, b: sum.b / rgbs.length };
+  const { h, l } = rgbToHsl(mean.r, mean.g, mean.b);
+  let lightness;
+  if (l > 0.7) {
+    lightness = 0.25;
+  } else if (l < 0.3) {
+    lightness = 0.9;
+  } else {
+    lightness = 0.86;
+  }
+  const color = hslToHex(h, 0, lightness);
+  return { color, lightness };
+}
+
+function sanitizeSvg(svgText) {
+  if (!svgText) return "";
+  return svgText.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+}
+
+function formatNumberForInput(value) {
+  if (!Number.isFinite(value)) return "";
+  const fixed = value.toFixed(PRECISION_DIGITS);
+  return fixed.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
+
+function formatDimensionValue(value, roundToInteger) {
+  if (!Number.isFinite(value)) return "";
+  if (roundToInteger) {
+    return Math.round(value).toString();
+  }
+  return value.toFixed(PRECISION_DIGITS).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+}
 
 export default function App() {
-  // State
-  const [data, setData] = useState([]);
-  const [daysFilter, setDaysFilter] = useState(DEFAULT_SPAN_DAYS);
-  const [startDate, setStartDate] = useState(DateTime.local().toISODate());
-  const [endDate, setEndDate] = useState(
-    DateTime.local().plus({ days: daysFilter }).toISODate(),
+  const [svgText, setSvgText] = useState(DEFAULT_SVG);
+  const [unit, setUnit] = useState(DEFAULT_OPTIONS.unit);
+  const [maintainAspect, setMaintainAspect] = useState(DEFAULT_OPTIONS.maintainAspect);
+  const [backgroundTransparent, setBackgroundTransparent] = useState(
+    DEFAULT_OPTIONS.backgroundTransparent,
   );
-  const [statuses, setStatuses] = useState([]);
-  const [keyword, setKeyword] = useState("");
-  const [sortField, setSortField] = useState("締切");
-  const [sortAsc, setSortAsc] = useState(true);
-
-  // Filter accordion open state (desktop open by default)
-  const [isFilterOpen, setIsFilterOpen] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(min-width: 768px)").matches,
+  const [showDimensionLines, setShowDimensionLines] = useState(
+    DEFAULT_OPTIONS.showDimensionLines,
   );
+  const [showDimensionLabels, setShowDimensionLabels] = useState(
+    DEFAULT_OPTIONS.showDimensionLabels,
+  );
+  const [roundDimensionValues, setRoundDimensionValues] = useState(
+    DEFAULT_OPTIONS.roundDimensionValues,
+  );
+  const [widthInput, setWidthInput] = useState("320");
+  const [heightInput, setHeightInput] = useState("180");
 
-  // ファイル入力要素をクリアするための ref
-  const fileInputRef = useRef(null);
+  const aspectRatioRef = useRef(320 / 180);
+  const lastSignatureRef = useRef(null);
+  const markerIdRef = useRef(null);
+  if (!markerIdRef.current) {
+    markerIdRef.current = `dim-arrow-${Math.random().toString(36).slice(2, 10)}`;
+  }
+  const markerId = markerIdRef.current;
 
-  // テーブルの参照（PNG 書き出し用）
-  const tableRef = useRef(null);
-  const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+  const svgMeta = useMemo(() => parseSvgMeta(svgText), [svgText]);
+  const neutralBackground = useMemo(
+    () => computeNeutralBackground(svgMeta.colors),
+    [svgMeta.colors],
+  );
+  const sanitizedSvg = useMemo(() => sanitizeSvg(svgText), [svgText]);
 
-  // refs for latest handlers (used by hotkeys)
-  const handlersRef = useRef({});
+  useEffect(() => {
+    if (!svgMeta.signature || svgMeta.signature === lastSignatureRef.current) return;
+    if (svgMeta.width) setWidthInput(formatNumberForInput(svgMeta.width));
+    if (svgMeta.height) setHeightInput(formatNumberForInput(svgMeta.height));
+    if (svgMeta.width && svgMeta.height && svgMeta.height !== 0) {
+      aspectRatioRef.current = svgMeta.width / svgMeta.height;
+    }
+    lastSignatureRef.current = svgMeta.signature;
+  }, [svgMeta.signature, svgMeta.width, svgMeta.height]);
 
-  // フィルタ条件のみリセット
-  const resetFilters = () => {
-    const today = DateTime.local().toISODate();
-    setDaysFilter(DEFAULT_SPAN_DAYS);
-    setStartDate(today);
-    setEndDate(
-      DateTime.fromISO(today).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-    );
-    setStatuses([]);
-    setKeyword("");
-    setSortField("締切");
-    setSortAsc(true);
+  useEffect(() => {
+    const width = parseFloat(widthInput);
+    const height = parseFloat(heightInput);
+    if (Number.isFinite(width) && Number.isFinite(height) && height !== 0) {
+      aspectRatioRef.current = width / height;
+    }
+  }, [widthInput, heightInput]);
+
+  useEffect(() => {
+    if (!maintainAspect) return;
+    const width = parseFloat(widthInput);
+    const height = parseFloat(heightInput);
+    if (Number.isFinite(width) && Number.isFinite(height) && height !== 0) {
+      aspectRatioRef.current = width / height;
+    }
+  }, [maintainAspect]);
+
+  const parsedWidth = parseFloat(widthInput);
+  const parsedHeight = parseFloat(heightInput);
+  const widthIsValid = Number.isFinite(parsedWidth) && parsedWidth > 0;
+  const heightIsValid = Number.isFinite(parsedHeight) && parsedHeight > 0;
+  const fallbackWidth = svgMeta.width || 320;
+  const fallbackHeight = svgMeta.height || 180;
+  const widthValue = widthIsValid ? parsedWidth : fallbackWidth;
+  const heightValue = heightIsValid ? parsedHeight : fallbackHeight;
+  const safeWidth = widthValue > 0 ? widthValue : 1;
+  const safeHeight = heightValue > 0 ? heightValue : 1;
+
+  const backgroundColor = backgroundTransparent ? "transparent" : neutralBackground.color;
+  const overlayColor = backgroundTransparent
+    ? "#1f1f1f"
+    : neutralBackground.lightness < 0.45
+    ? "#f5f7f9"
+    : "#1b1f24";
+
+  const widthDisplay =
+    widthValue > 0
+      ? `${showDimensionLabels ? "幅 " : ""}${formatDimensionValue(
+          widthValue,
+          roundDimensionValues,
+        )}${unit}`
+      : "";
+  const heightDisplay =
+    heightValue > 0
+      ? `${showDimensionLabels ? "高さ " : ""}${formatDimensionValue(
+          heightValue,
+          roundDimensionValues,
+        )}${unit}`
+      : "";
+
+  const maxSide = Math.max(safeWidth, safeHeight);
+  const margin = Math.max(maxSide * 0.15, 20);
+  const widthLineY = -margin * 0.6;
+  const heightLineX = -margin * 0.6;
+  const extensionOvershoot = margin * 0.2;
+  const widthTextY = widthLineY - margin * 0.2;
+  const heightTextX = heightLineX - margin * 0.2;
+  const viewBox = `${-margin} ${-margin} ${safeWidth + margin * 2} ${safeHeight + margin * 2}`;
+  const lineWidth = Math.max(Math.min(maxSide * 0.012, 4), 1.1);
+  const fontSize = Math.max(Math.min(maxSide * 0.1, 26), 12);
+  const colorCount = svgMeta.colors.length;
+
+  const handleWidthChange = (event) => {
+    const { value } = event.target;
+    setWidthInput(value);
+    if (!maintainAspect) return;
+    const numeric = parseFloat(value);
+    const ratio = aspectRatioRef.current;
+    if (!Number.isFinite(numeric) || !Number.isFinite(ratio) || ratio === 0) return;
+    const nextHeight = numeric / ratio;
+    if (Number.isFinite(nextHeight) && nextHeight > 0) {
+      setHeightInput(formatNumberForInput(nextHeight));
+    }
   };
 
-  // startDate または daysFilter が変わったら endDate を自動更新
-  useEffect(() => {
-    const sd = DateTime.fromISO(startDate);
-    setEndDate(sd.plus({ days: daysFilter }).toISODate());
-  }, [startDate, daysFilter]);
-
-  const prevStateRef = useRef(null);
-
-  // マウント時に履歴・sessionStorage から状態を復元
-  useEffect(() => {
-    const applyState = (state) => {
-      if (!state) return;
-      try {
-        const { data: raw, filters } = state;
-        const parsed = raw.map((r) => ({
-          ...r,
-          締切: DateTime.fromISO(r.締切, { zone: "Asia/Tokyo" }),
-        }));
-        setData(parsed);
-        setDaysFilter(filters.days);
-        setStartDate(filters.startDate);
-        setEndDate(filters.endDate);
-        setStatuses(filters.statuses);
-        setKeyword(filters.keyword);
-        if (filters.sortField) setSortField(filters.sortField);
-        if (typeof filters.sortAsc === "boolean") setSortAsc(filters.sortAsc);
-        prevStateRef.current = JSON.stringify(state);
-      } catch (e) {
-        console.error("State apply failed:", e);
-      }
-    };
-
-    const restore = () => {
-      let state = window.history.state;
-      if (!state) {
-        const stored = sessionStorage.getItem("webclass-todo");
-        if (stored) {
-          try {
-            state = JSON.parse(stored);
-          } catch {}
-        }
-      }
-      if (state) {
-        applyState(state);
-        window.history.replaceState(state, "");
-      }
-    };
-
-    restore();
-    window.addEventListener("pageshow", restore);
-    const onPop = (e) => applyState(e.state);
-    window.addEventListener("popstate", onPop);
-
-    return () => {
-      window.removeEventListener("pageshow", restore);
-      window.removeEventListener("popstate", onPop);
-    };
-  }, [preview]);
-
-  // Persist and push history
-  useEffect(() => {
-    const state = {
-      data: data.map((r) => ({
-        締切: r.締切.toISO(),
-        教材: r.教材,
-        コース名: r.コース名,
-        状態: r.状態,
-      })),
-      filters: {
-        days: daysFilter,
-        startDate,
-        endDate,
-        statuses,
-        keyword,
-        sortField,
-        sortAsc,
-      },
-    };
-    const json = JSON.stringify(state);
-    if (prevStateRef.current === null) {
-      window.history.replaceState(state, "");
-    } else if (prevStateRef.current !== json) {
-      window.history.pushState(state, "");
+  const handleHeightChange = (event) => {
+    const { value } = event.target;
+    setHeightInput(value);
+    if (!maintainAspect) return;
+    const numeric = parseFloat(value);
+    const ratio = aspectRatioRef.current;
+    if (!Number.isFinite(numeric) || !Number.isFinite(ratio) || !ratio) return;
+    const nextWidth = numeric * ratio;
+    if (Number.isFinite(nextWidth) && nextWidth > 0) {
+      setWidthInput(formatNumberForInput(nextWidth));
     }
-    prevStateRef.current = json;
+  };
 
-    if (data.length) {
-      sessionStorage.setItem("webclass-todo", json);
-    } else {
-      sessionStorage.removeItem("webclass-todo");
-    }
-  }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
-
-  // Keep latest handlers for hotkeys
-  useEffect(() => {
-    handlersRef.current = {
-      exportCSV,
-      exportICS,
-      exportTodoist,
-      exportPNGTable,
-      exportPNGList,
-      closePreview,
-      confirmDownload,
-      resetFilters,
-    };
-  });
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      const h = handlersRef.current;
-      if (e.target.closest('input,textarea,select')) return;
-      if (e.key === 'Escape') {
-        h.closePreview();
-      } else if (e.key === 'Enter' && preview) {
-        e.preventDefault();
-        h.confirmDownload();
-      } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        fileInputRef.current?.click();
-      } else if (e.key === 'c' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportCSV();
-      } else if (e.key === 'i' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportICS();
-      } else if (e.key === 't' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportTodoist();
-      } else if (e.key === 'p' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportPNGTable(false);
-      } else if (e.key === 'l' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportPNGList();
-      } else if (e.key === 'r' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.resetFilters();
-      } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        window.open('./usage.html', '_blank');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [preview]);
-
-  // Global error handling
-  useEffect(() => {
-    const onError = (e) => {
-      console.error('Unhandled error:', e.error || e);
-      alert('エラーが発生しました: ' + (e.error?.message || e.message));
-    };
-    const onRejection = (e) => {
-      console.error('Unhandled promise rejection:', e.reason);
-      alert('エラーが発生しました: ' + e.reason);
-    };
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
-    return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
-    };
-  }, []);
-
-  // File upload parsing
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ({ target }) => {
-      const lines = target.result.split(/\r?\n/);
-      const idx = lines.findIndex((l) =>
-        l.startsWith('"学部","学科","コース名","教材","締切"'),
-      );
-      if (idx < 0) {
-        alert("ヘッダー行が見つかりません");
-        return;
-      }
-      const csvText = lines.slice(idx).join("\n");
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: ({ data: rows, meta }) => {
-          const map = {
-            締切: ["締切", "締切日", "期限"],
-            教材: ["教材", "課題", "タイトル"],
-            コース名: ["コース名", "科目名", "講義名"],
-            状態: ["状態", "ステータス", "提出状況"],
-          };
-          const fieldMap = {};
-          Object.entries(map).forEach(([key, aliases]) => {
-            const found = meta.fields.find((f) => aliases.includes(f));
-            if (found) fieldMap[key] = found;
-          });
-          const missing = Object.keys(map).filter((k) => !fieldMap[k]);
-          if (missing.length) {
-            alert(`列が見つかりません: ${missing.join(", ")}`);
-            return;
-          }
-          const parsed = rows.map((r) => {
-            let dt = DateTime.fromISO(r[fieldMap["締切"]], {
-              zone: "Asia/Tokyo",
-            });
-            if (!dt.isValid)
-              dt = DateTime.fromFormat(
-                r[fieldMap["締切"]],
-                "yyyy-MM-dd HH:mm",
-                { zone: "Asia/Tokyo" },
-              );
-            return {
-              締切: dt,
-              教材: r[fieldMap["教材"]] || "",
-              コース名: r[fieldMap["コース名"]] || "",
-              状態: r[fieldMap["状態"]] || "",
-            };
-          });
-          setData(parsed);
-        },
+    file
+      .text()
+      .then((text) => {
+        setSvgText(text);
+      })
+      .catch(() => {
+        alert("SVG ファイルの読み込みに失敗しました");
       });
-    };
-    reader.readAsText(file, "utf-8");
+    event.target.value = "";
   };
 
-  // Filter
-  const filtered = data
-    .filter((r) => r.締切.isValid)
-    .filter((r) => {
-      const d = r.締切;
-      const s = DateTime.fromISO(startDate);
-      const e = DateTime.fromISO(endDate);
-      return d >= s && d <= e;
-    })
-    .filter((r) => !statuses.length || statuses.includes(r.状態))
-    .filter(
-      (r) =>
-        !keyword || r.教材.includes(keyword) || r.コース名.includes(keyword),
-    )
-    .sort((a, b) => {
-      const va =
-        sortField === "締切" ? a.締切.toMillis() : a[sortField] || "";
-      const vb =
-        sortField === "締切" ? b.締切.toMillis() : b[sortField] || "";
-      if (va < vb) return sortAsc ? -1 : 1;
-      if (va > vb) return sortAsc ? 1 : -1;
-      return 0;
-    });
+  const handleSvgTextChange = (event) => setSvgText(event.target.value);
 
-  const nextDeadline = filtered.reduce((min, r) => {
-    if (!min || r.締切 < min) return r.締切;
-    return min;
-  }, null);
-
-  // Utils
-  const saveFile = (blob, name) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleReset = () => {
+    setUnit(DEFAULT_OPTIONS.unit);
+    setMaintainAspect(DEFAULT_OPTIONS.maintainAspect);
+    setBackgroundTransparent(DEFAULT_OPTIONS.backgroundTransparent);
+    setShowDimensionLines(DEFAULT_OPTIONS.showDimensionLines);
+    setShowDimensionLabels(DEFAULT_OPTIONS.showDimensionLabels);
+    setRoundDimensionValues(DEFAULT_OPTIONS.roundDimensionValues);
+    setSvgText(DEFAULT_SVG);
   };
 
-  const openPreview = (blob, name, mime) => {
-    if (mime === "text/csv") {
-      blob.text().then((text) => {
-        const { data: rows } = Papa.parse(text.trim());
-        setPreview({ name, mime, blob, rows });
-      });
-    } else {
-      const url = URL.createObjectURL(blob);
-      setPreview({ url, name, mime, blob });
-    }
-  };
-
-  const closePreview = () => {
-    if (preview?.url) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
-
-  const confirmDownload = () => {
-    if (preview) {
-      saveFile(preview.blob, preview.name);
-      closePreview();
-    }
-  };
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(true);
-    }
-  };
-
-  const exportCSV = () => {
-    try {
-      const csv = Papa.unparse(filtered, {
-        columns: ["締切", "教材", "コース名", "状態"],
-      });
-      const blob = new Blob([csv], { type: "text/csv" });
-      openPreview(blob, "todo_filtered.csv", "text/csv");
-    } catch (e) {
-      console.error(e);
-      alert("CSV の生成に失敗しました");
-    }
-  };
-
-  const exportICS = () => {
-    if (!filtered.length) return;
-    try {
-      const lines = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//WebClass ToDo//JP",
-      "CALSCALE:GREGORIAN",
-      "X-WR-TIMEZONE:Asia/Tokyo",
-      "BEGIN:VTIMEZONE",
-      "TZID:Asia/Tokyo",
-      "BEGIN:STANDARD",
-      "TZOFFSETFROM:+0900",
-      "TZOFFSETTO:+0900",
-      "TZNAME:JST",
-      "DTSTART:19700101T000000",
-      "END:STANDARD",
-      "END:VTIMEZONE",
-    ];
-      const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
-      filtered.forEach((r) => {
-        const dt = r.締切.setZone("Asia/Tokyo");
-        const dtStr = dt.toFormat("yyyyMMdd'T'HHmmss");
-        lines.push(
-          "BEGIN:VEVENT",
-          `UID:${uuidv4()}@webclass`,
-          `DTSTAMP:${now}`,
-          `DTSTART;TZID=Asia/Tokyo:${dtStr}`,
-          `SUMMARY:${r.教材} (${r.コース名})`,
-          "END:VEVENT",
-        );
-      });
-      lines.push("END:VCALENDAR");
-      downloadBlob(lines.join("\r\n"), "webclass_todo.ics", "text/calendar");
-    } catch (e) {
-      console.error(e);
-      alert("iCalendar の生成に失敗しました");
-    }
-  };
-
-  const exportTodoist = () => {
-    try {
-      const recs = filtered.map((r) => ({
-        TYPE: "task",
-        CONTENT: `${r.教材} (${r.コース名})`,
-        DATE: r.締切.toFormat("yyyy-MM-dd HH:mm"),
-        DATE_LANG: "ja",
-        TIMEZONE: "Asia/Tokyo",
-      }));
-      const csv = Papa.unparse(recs);
-      const blob = new Blob([csv], { type: "text/csv" });
-      openPreview(blob, "todoist_template.csv", "text/csv");
-    } catch (e) {
-      console.error(e);
-      alert("Todoist CSV の生成に失敗しました");
-    }
-  };
-
-  const exportPNGList = () => {
-    const wrapper = buildImageWrapper(true, filtered, tableRef);
-    captureAndPreview(wrapper, "webclass_todo_mobile.png", openPreview);
-  };
-
-  const exportPNGTable = (isMobile) => {
-    const name = isMobile
-      ? "webclass_todo_mobile.png"
-      : "webclass_todo_table.png";
-    const wrapper = buildImageWrapper(isMobile, filtered, tableRef);
-    captureAndPreview(wrapper, name, openPreview);
-  };
-
-  const shareToReminders = () => {
-    try {
-      if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
-      const { error, value } = createEvents({
-        events: filtered.map((r) => ({
-          start: [
-            r.締切.year,
-            r.締切.month,
-            r.締切.day,
-            r.締切.hour,
-            r.締切.minute,
-          ],
-          title: `${r.教材} (${r.コース名})`,
-        })),
-      });
-      if (!error) {
-        const file = new File(
-          [new Blob([value], { type: "text/calendar" })],
-          "webclass_todo.ics",
-        );
-        navigator.share({ files: [file], title: "WebClass To-Do" });
-      }
-    } catch (e) {
-      console.error(e);
-      alert("共有に失敗しました");
-    }
-  };
-
-  // ファイル選択＆抽出結果をリセット
-  const clearFile = () => {
-    setData([]);
-
-    // 抽出条件のリセット
-    resetFilters();
-
-    sessionStorage.removeItem("webclass-todo");
-
-    const state = { data: [], filters: {
-      days: DEFAULT_SPAN_DAYS,
-      startDate: TODAY,
-      endDate: DateTime.fromISO(TODAY).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-      statuses: [],
-      keyword: "",
-      sortField: "締切",
-      sortAsc: true,
-    }};
-    window.history.replaceState(state, "");
-    prevStateRef.current = JSON.stringify(state);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  // Render
   return (
-    <>
-      <div className="container">
-        <header>
-          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>📋 WebClass To-Do</h1>
-          {/* ファイル解除ボタンはデータ読み込み後だけ表示 */}
-          {data.length > 0 && (
-            <button onClick={clearFile} style={{ marginLeft: "1rem" }}>
-              🚪 ファイル選択解除
+    <div className="app">
+      <header className="app-header">
+        <h1>SVG 寸法アノテーション</h1>
+        <p>アップロードした SVG に工業図面風の寸法線を重ね、設定をリアルタイムで確認できます。</p>
+      </header>
+      <main className="app-layout">
+        <section className="panel panel-controls">
+          <div className="panel-heading">
+            <h2>設定</h2>
+            <button type="button" className="btn ghost" onClick={handleReset}>
+              デフォルトに戻す
             </button>
-          )}
-        </header>
-        {!data.length && (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFile}
+          </div>
+          <div className="form-grid">
+            <label>
+              <span className="label">幅</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={widthInput}
+                onChange={handleWidthChange}
+              />
+            </label>
+            <label>
+              <span className="label">高さ</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={heightInput}
+                onChange={handleHeightChange}
+              />
+            </label>
+            <label>
+              <span className="label">単位</span>
+              <select value={unit} onChange={(event) => setUnit(event.target.value)}>
+                <option value="px">px</option>
+                <option value="mm">mm</option>
+              </select>
+            </label>
+          </div>
+          <div className="toggle-group">
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={maintainAspect}
+                onChange={(event) => setMaintainAspect(event.target.checked)}
+              />
+              <span className="toggle-indicator" />
+              <span>アスペクト比を維持</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={backgroundTransparent}
+                onChange={(event) => setBackgroundTransparent(event.target.checked)}
+              />
+              <span className="toggle-indicator" />
+              <span>背景を透過</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={showDimensionLines}
+                onChange={(event) => setShowDimensionLines(event.target.checked)}
+              />
+              <span className="toggle-indicator" />
+              <span>寸法線を表示</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={showDimensionLabels}
+                onChange={(event) => setShowDimensionLabels(event.target.checked)}
+              />
+              <span className="toggle-indicator" />
+              <span>寸法ラベル（幅/高さ）を表示</span>
+            </label>
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={roundDimensionValues}
+                onChange={(event) => setRoundDimensionValues(event.target.checked)}
+              />
+              <span className="toggle-indicator" />
+              <span>寸法値を正数に丸める</span>
+            </label>
+          </div>
+          <p className="helper muted">背景色は SVG の配色を解析して無彩色を自動選択します。</p>
+          <div className="upload-section">
+            <label className="file-input">
+              <span>SVG ファイルを読み込む</span>
+              <input type="file" accept="image/svg+xml,.svg" onChange={handleFileUpload} />
+            </label>
+            <p className="helper">ファイルを読み込むか、下のテキストエリアに SVG コードを貼り付けてください。</p>
+          </div>
+          <label className="textarea-label">
+            <span className="label">SVG ソース</span>
+            <textarea
+              value={svgText}
+              onChange={handleSvgTextChange}
+              rows={12}
+              spellCheck={false}
             />
-            <p>課題実施状況一覧のCSVを選択してください。</p>
-            <p>
-              <a href="./usage.html" target="_blank" rel="noopener" className="button">
-                使い方を見る
-              </a>
-            </p>
-          </>
-        )}
-        {data.length > 0 && (
-          <>
-            <aside className="sidebar">
-              <details
-                className="filter-accordion"
-                open={isFilterOpen}
-                onToggle={(e) => setIsFilterOpen(e.target.open)}
+          </label>
+        </section>
+        <section className="panel panel-preview">
+          <h2 className="panel-title">プレビュー</h2>
+          {svgMeta.error ? (
+            <div className="alert error">
+              <p>{svgMeta.error}</p>
+            </div>
+          ) : (
+            <div className="preview-stack">
+              <div
+                className="svg-stage"
+                style={{
+                  background: backgroundColor,
+                  color: overlayColor,
+                  "--aspect-ratio": `${safeWidth} / ${safeHeight}`,
+                }}
               >
-                <summary>🔍 抽出条件</summary>
-                <div className="filter-fields">
-                  <label htmlFor="daysFilter">期間を指定（日）:</label>
-                  <div className="number-spinner">
-                    <button
-                      type="button"
-                      onClick={() => setDaysFilter((d) => Math.max(0, d - 1))}
-                      aria-label="減らす"
-                    >
-                      −
-                    </button>
-                    <input
-                      id="daysFilter"
-                      type="number"
-                      min={0}
-                      value={daysFilter}
-                      onChange={(e) => setDaysFilter(Number(e.target.value))}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setDaysFilter((d) => d + 1)}
-                      aria-label="増やす"
-                    >
-                      ＋
-                    </button>
-                  </div>
-                  <label>
-                    開始日:
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    終了日:
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    状態で絞り込み:
-                    <select
-                      multiple
-                      value={statuses}
-                      onChange={(e) =>
-                        setStatuses(
-                          Array.from(e.target.selectedOptions, (o) => o.value),
-                        )
-                      }
-                    >
-                      {[...new Set(data.map((r) => r.状態))].map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    キーワード:
-                    <input
-                      type="text"
-                      placeholder="例: Python"
-                      value={keyword}
-                      onChange={(e) => setKeyword(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="reset-btn"
+                <div className="svg-content" dangerouslySetInnerHTML={{ __html: sanitizedSvg }} />
+                {showDimensionLines && (
+                  <svg
+                    className="dimension-overlay"
+                    viewBox={viewBox}
+                    preserveAspectRatio="xMidYMid meet"
                   >
-                    条件リセット
-                  </button>
-                </div>
-              </details>
-            </aside>
-            <main className="main">
-              <div className="metrics">
-                <span>抽出件数: {filtered.length}</span>
-                {nextDeadline && (
-                  <span>次の締切: {nextDeadline.toFormat("yyyy-MM-dd")}</span>
+                    <defs>
+                      <marker
+                        id={markerId}
+                        markerWidth="8"
+                        markerHeight="8"
+                        refX="8"
+                        refY="3"
+                        orient="auto"
+                        markerUnits="strokeWidth"
+                      >
+                        <path d="M0,3 L8,6 L8,0 Z" fill={overlayColor} />
+                      </marker>
+                    </defs>
+                    <g
+                      stroke={overlayColor}
+                      strokeWidth={lineWidth}
+                      fill="none"
+                      strokeLinecap="square"
+                    >
+                      <line x1={0} y1={0} x2={0} y2={widthLineY + extensionOvershoot} />
+                      <line
+                        x1={safeWidth}
+                        y1={0}
+                        x2={safeWidth}
+                        y2={widthLineY + extensionOvershoot}
+                      />
+                      <line x1={heightLineX + extensionOvershoot} y1={0} x2={0} y2={0} />
+                      <line
+                        x1={heightLineX + extensionOvershoot}
+                        y1={safeHeight}
+                        x2={0}
+                        y2={safeHeight}
+                      />
+                      <line
+                        x1={0}
+                        y1={widthLineY}
+                        x2={safeWidth}
+                        y2={widthLineY}
+                        markerStart={`url(#${markerId})`}
+                        markerEnd={`url(#${markerId})`}
+                      />
+                      <line
+                        x1={heightLineX}
+                        y1={0}
+                        x2={heightLineX}
+                        y2={safeHeight}
+                        markerStart={`url(#${markerId})`}
+                        markerEnd={`url(#${markerId})`}
+                      />
+                    </g>
+                    {widthDisplay && (
+                      <text
+                        x={safeWidth / 2}
+                        y={widthTextY}
+                        fill={overlayColor}
+                        fontSize={fontSize}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                      >
+                        {widthDisplay}
+                      </text>
+                    )}
+                    {heightDisplay && (
+                      <text
+                        x={heightTextX}
+                        y={safeHeight / 2}
+                        fill={overlayColor}
+                        fontSize={fontSize}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        transform={`rotate(-90 ${heightTextX} ${safeHeight / 2})`}
+                      >
+                        {heightDisplay}
+                      </text>
+                    )}
+                  </svg>
                 )}
               </div>
-              <div
-                className="table-container"
-                ref={tableRef}
-                style={{ overflowX: "auto" }}
-              >
-                <table style={{ fontSize: "0.875rem", lineHeight: "1.4" }}>
-                  <thead>
-                    <tr>
-                      <th onClick={() => handleSort("締切")} className="sortable">
-                        締切
-                        {sortField === "締切" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("教材")} className="sortable">
-                        教材
-                        {sortField === "教材" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("コース名")} className="sortable">
-                        コース名
-                        {sortField === "コース名" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("状態")} className="sortable">
-                        状態
-                        {sortField === "状態" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} style={{ textAlign: "center" }}>
-                          該当するデータがありません
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((r, i) => (
-                        <tr key={i}>
-                          <td>{r.締切.toFormat("yyyy-MM-dd HH:mm")}</td>
-                          <td>{r.教材}</td>
-                          <td>{r.コース名}</td>
-                          <td>{r.状態}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="button-group">
-                <button onClick={exportCSV}>CSV ダウンロード</button>
-                <button onClick={exportICS}>
-                  iCalendar (.ics) ダウンロード
-                </button>
-                <button onClick={exportTodoist}>
-                  Todoist CSV ダウンロード
-                </button>
-                <button onClick={() => exportPNGTable(false)}>
-                  PNG（テーブル）
-                </button>
-                <button onClick={exportPNGList}>PNG（縦リスト）</button>
-              </div>
-              <div className="list-container">
-                {Object.entries(
-                  filtered.reduce((acc, r) => {
-                    const d = r.締切.toFormat("yyyy-MM-dd");
-                    acc[d] = acc[d] ? [...acc[d], r] : [r];
-                    return acc;
-                  }, {})
-                )
-                  .sort(([a], [b]) => (a < b ? -1 : 1))
-                  .map(([date, rows]) => (
-                    <div key={date} className="list-day">
-                      <h3 className="list-date">{date}</h3>
-                      {rows.map((r, i) => (
-                        <div key={i} className="list-item">
-                          <div className="list-title">{r.教材}</div>
-                          <div className="list-meta">
-                            <span>{r.締切.toFormat("HH:mm")}</span>
-                            <span>{r.コース名}</span>
-                            <span>{r.状態}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-              </div>
-            </main>
-          </>
-        )}
-      </div>
-      {preview && (
-        <div className="modal-overlay" onClick={closePreview}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            {preview.mime.startsWith("image/") ? (
-              <img
-                src={preview.url}
-                alt={preview.name}
-                style={{
-                  maxWidth: "80vw",
-                  maxHeight: "80vh",
-                  objectFit: "contain",
-                }}
-              />
-            ) : preview.mime === "text/csv" ? (
-              <div className="csv-preview">
-                <table>
-                  <thead>
-                    <tr>
-                      {preview.rows[0].map((h, i) => (
-                        <th key={i}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.rows.slice(1).map((row, i) => (
-                      <tr key={i}>
-                        {row.map((cell, j) => (
-                          <td key={j}>{cell}</td>
+              <dl className="dimension-summary">
+                <div>
+                  <dt>幅</dt>
+                  <dd>{widthDisplay || "—"}</dd>
+                </div>
+                <div>
+                  <dt>高さ</dt>
+                  <dd>{heightDisplay || "—"}</dd>
+                </div>
+                <div>
+                  <dt>背景色</dt>
+                  <dd>
+                    <span
+                      className="color-chip"
+                      style={{
+                        background: backgroundTransparent ? overlayColor : backgroundColor,
+                      }}
+                    />
+                    {backgroundTransparent ? "透過" : backgroundColor}
+                  </dd>
+                </div>
+                <div>
+                  <dt>検出した色</dt>
+                  <dd>
+                    {colorCount > 0 ? (
+                      <div className="color-list">
+                        {svgMeta.colors.slice(0, 6).map((color) => (
+                          <span
+                            key={color}
+                            className="color-chip"
+                            style={{ background: color }}
+                            title={color}
+                          />
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <iframe
-                src={preview.url}
-                title="preview"
-                style={{ width: "80vw", height: "60vh", border: "none" }}
-              />
-            )}
-            <div style={{ textAlign: "right", marginTop: "1rem" }}>
-              <button onClick={confirmDownload} className="primary">
-                ダウンロード
-              </button>
-              <button onClick={closePreview} style={{ marginLeft: "0.5rem" }}>
-                閉じる
-              </button>
+                        {colorCount > 6 && <span className="color-more">+{colorCount - 6}</span>}
+                      </div>
+                    ) : (
+                      <span>なし</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
-          </div>
-        </div>
-      )}
-    </>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }
