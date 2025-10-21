@@ -1,885 +1,567 @@
-import React, { useState, useRef, useEffect } from "react";
-import Papa from "papaparse";
-import { DateTime } from "luxon";
-import { v4 as uuidv4 } from "uuid";
-import { createEvents } from "ics";
-// import domtoimage from 'dom-to-image';
-import html2canvas from "html2canvas";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
-const DEFAULT_SPAN_DAYS = 7; // 期間
+const UNIT_DEFINITIONS = [
+  { value: "px", label: "px", toPx: (v) => v },
+  { value: "mm", label: "mm", toPx: (v) => (v / 25.4) * 96 },
+];
 
-function useDefaultFilters() {
-  const [days, setDays] = useState(DEFAULT_SPAN_DAYS);
-  const [startDate, setStartDate] = useState(TODAY);
-  const [endDate, setEndDate] = useState(
-    DateTime.local().plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-  );
-  const [keyword, setKeyword] = useState("");
-  const [statusOpt, setStatusOpt] = useState([]);
+const NEUTRAL_PALETTE = [
+  "#f5f5f5",
+  "#e7e5e4",
+  "#d4d4d8",
+  "#a8a29e",
+  "#1f2937",
+];
 
-  /** 条件をデフォルトへ戻す */
-  const resetFilters = () => {
-    setDays(DEFAULT_SPAN_DAYS);
-    setStartDate(TODAY);
-    setEndDate(DateTime.local().plus({ days: DEFAULT_SPAN_DAYS }).toISODate());
-    setKeyword("");
-    setStatusOpt([]);
-  };
+const DEFAULT_WIDTH = 200;
+const DEFAULT_HEIGHT = 120;
+const DEFAULT_RATIO = DEFAULT_WIDTH / DEFAULT_HEIGHT;
 
-  return {
-    days,
-    startDate,
-    endDate,
-    keyword,
-    statusOpt,
-    setDays,
-    setStartDate,
-    setEndDate,
-    setKeyword,
-    setStatusOpt,
-    resetFilters,
-  };
-}
+const DEFAULT_SVG = `
+<svg viewBox="0 0 ${DEFAULT_WIDTH} ${DEFAULT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="${DEFAULT_WIDTH - 20}" height="${DEFAULT_HEIGHT - 20}" rx="12" fill="#4f46e5" />
+  <circle cx="70" cy="60" r="18" fill="#22d3ee" />
+  <circle cx="130" cy="60" r="18" fill="#f97316" />
+</svg>`;
 
-function downloadBlob(data, fileName, mimeType) {
-  const blob = new Blob([data], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+const MAX_PREVIEW_SIZE = 420;
 
-// ------ Image helper utilities ------
-const getThemeColors = () => {
-  const styles = getComputedStyle(document.documentElement);
-  return {
-    bg: styles.getPropertyValue("--bg").trim() || "#ffffff",
-    surface: styles.getPropertyValue("--surface").trim() || "#ffffff",
-    border: styles.getPropertyValue("--border").trim() || "#ddd",
-    text: styles.getPropertyValue("--text").trim() || "#000",
-  };
+const clampNumber = (value) => (Number.isFinite(value) ? value : null);
+
+const parseNumeric = (value) => {
+  if (typeof value !== "string") return clampNumber(Number(value));
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseFloat(trimmed.replace(/,/g, "."));
+  return clampNumber(parsed);
 };
 
-const buildImageWrapper = (isMobile, filtered, tableRef) => {
-  const { bg, surface, border, text } = getThemeColors();
-  const wrapper = document.createElement("div");
-  wrapper.style.backgroundColor = bg;
-  wrapper.style.color = text;
-  wrapper.style.padding = "1rem";
-  if (isMobile) {
-    filtered.forEach((r) => {
-      const card = document.createElement("div");
-      card.style.margin = "0.5rem 0";
-      card.style.padding = "0.75rem";
-      card.style.border = `1px solid ${border}`;
-      card.style.borderRadius = "4px";
-      card.style.background = surface;
-      const fields = [
-        ["締切", r.締切.toFormat("yyyy-MM-dd HH:mm")],
-        ["教材", r.教材],
-        ["コース", r.コース名],
-        ["状態", r.状態],
-      ];
-      fields.forEach(([label, value]) => {
-        const row = document.createElement("div");
-        row.style.marginBottom = "0.25rem";
-        const keyEl = document.createElement("span");
-        keyEl.style.fontWeight = "bold";
-        keyEl.textContent = `${label}: `;
-        const valEl = document.createElement("span");
-        valEl.textContent = value;
-        row.appendChild(keyEl);
-        row.appendChild(valEl);
-        card.appendChild(row);
-      });
-      wrapper.appendChild(card);
-    });
-  } else {
-    const container = tableRef.current;
-    if (!container) return null;
-    const tableEl = container.querySelector("table");
-    if (!tableEl) return null;
-    wrapper.appendChild(tableEl.cloneNode(true));
+const normalizeHex = (hex) => {
+  if (!hex) return null;
+  const cleaned = hex.replace(/[^0-9a-f]/gi, "");
+  if (cleaned.length === 3) {
+    return cleaned
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
-  return wrapper;
+  if (cleaned.length === 6) return cleaned;
+  if (cleaned.length === 8) return cleaned.slice(0, 6);
+  return null;
 };
 
-const captureAndPreview = async (wrapper, name, openPreview) => {
-  if (!wrapper) return;
-  const { bg } = getThemeColors();
-  document.body.appendChild(wrapper);
-  try {
-    const canvas = await html2canvas(wrapper, {
-      scale: window.devicePixelRatio || 2,
-      backgroundColor: bg,
-      useCORS: true,
-      width: wrapper.scrollWidth,
-      height: wrapper.scrollHeight,
+const hexToRgb = (hex) => {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return null;
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return { r, g, b };
+};
+
+const rgbStringToRgb = (value) => {
+  const result = value.match(/rgba?\(([^)]+)\)/i);
+  if (!result) return null;
+  const parts = result[1]
+    .split(",")
+    .map((part) => part.trim())
+    .slice(0, 3)
+    .map((part) => {
+      if (part.endsWith("%")) {
+        const num = Number.parseFloat(part.slice(0, -1));
+        return clampNumber((num / 100) * 255);
+      }
+      return clampNumber(Number.parseFloat(part));
     });
-    canvas.toBlob((blob) => openPreview(blob, name, "image/png"), "image/png");
-  } catch (e) {
-    alert(`${name} の生成に失敗しました`);
-  } finally {
-    document.body.removeChild(wrapper);
+  if (parts.some((part) => !Number.isFinite(part))) return null;
+  return { r: parts[0], g: parts[1], b: parts[2] };
+};
+
+const colorDistance = (a, b) =>
+  Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+
+const extractSvgColors = (svg) => {
+  if (!svg) return [];
+  const matches = svg.match(/#(?:[0-9a-f]{3,8})\b|rgba?\([^)]*\)/gi) || [];
+  return matches
+    .map((token) =>
+      token.startsWith("#") ? hexToRgb(token) : rgbStringToRgb(token),
+    )
+    .filter(Boolean);
+};
+
+const chooseNeutralBackground = (colors) => {
+  const palette = NEUTRAL_PALETTE.map((hex) => ({ hex, rgb: hexToRgb(hex) }));
+  if (!colors.length) return palette[0].hex;
+  let best = palette[0];
+  let bestScore = -Infinity;
+  palette.forEach((candidate) => {
+    const score = colors.reduce(
+      (min, color) => Math.min(min, colorDistance(candidate.rgb, color)),
+      Infinity,
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  });
+  return best.hex;
+};
+
+const backgroundBrightness = (hex) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 255;
+  return 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b;
+};
+
+const formatDimension = (input, unit, { round, showLabel, label }) => {
+  const trimmed = (input ?? "").toString().trim();
+  const parsed = parseNumeric(trimmed);
+  const value =
+    round && Number.isFinite(parsed)
+      ? Math.round(parsed).toString()
+      : trimmed || "0";
+  const suffix = `${value}${unit}`;
+  return showLabel ? `${label} ${suffix}` : suffix;
+};
+
+const sanitizeSvgMarkup = (svgMarkup, width, height, unit) => {
+  if (typeof window === "undefined" || !svgMarkup) return "";
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
+    if (doc.querySelector("parsererror")) return "";
+    const svg = doc.querySelector("svg");
+    if (!svg) return "";
+
+    svg.querySelectorAll("script").forEach((node) => node.remove());
+    const walker = document.createTreeWalker(svg, NodeFilter.SHOW_ELEMENT);
+    const toClean = [];
+    while (walker.nextNode()) {
+      toClean.push(walker.currentNode);
+    }
+    toClean.forEach((node) => {
+      Array.from(node.attributes).forEach((attr) => {
+        if (attr.name.toLowerCase().startsWith("on")) {
+          node.removeAttribute(attr.name);
+        }
+      });
+    });
+
+    const widthValue = Number.isFinite(width) && width > 0 ? width : DEFAULT_WIDTH;
+    const heightValue = Number.isFinite(height) && height > 0 ? height : DEFAULT_HEIGHT;
+
+    svg.setAttribute("width", `${widthValue}${unit}`);
+    svg.setAttribute("height", `${heightValue}${unit}`);
+    if (!svg.hasAttribute("viewBox")) {
+      svg.setAttribute("viewBox", `0 0 ${widthValue} ${heightValue}`);
+    }
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    return svg.outerHTML;
+  } catch (error) {
+    console.warn("SVG parse failed", error);
+    return "";
   }
 };
 
 export default function App() {
-  // State
-  const [data, setData] = useState([]);
-  const [daysFilter, setDaysFilter] = useState(DEFAULT_SPAN_DAYS);
-  const [startDate, setStartDate] = useState(DateTime.local().toISODate());
-  const [endDate, setEndDate] = useState(
-    DateTime.local().plus({ days: daysFilter }).toISODate(),
-  );
-  const [statuses, setStatuses] = useState([]);
-  const [keyword, setKeyword] = useState("");
-  const [sortField, setSortField] = useState("締切");
-  const [sortAsc, setSortAsc] = useState(true);
+  const [unit, setUnit] = useState("px");
+  const [widthInput, setWidthInput] = useState(String(DEFAULT_WIDTH));
+  const [heightInput, setHeightInput] = useState(String(DEFAULT_HEIGHT));
+  const [lockAspect, setLockAspect] = useState(true);
+  const [transparentBackground, setTransparentBackground] = useState(false);
+  const [showDimensionLines, setShowDimensionLines] = useState(true);
+  const [showDimensionLabels, setShowDimensionLabels] = useState(false);
+  const [roundDimensionValues, setRoundDimensionValues] = useState(false);
+  const [svgMarkup, setSvgMarkup] = useState(DEFAULT_SVG);
+  const [autoBackground, setAutoBackground] = useState(NEUTRAL_PALETTE[0]);
 
-  // Filter accordion open state (desktop open by default)
-  const [isFilterOpen, setIsFilterOpen] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(min-width: 768px)").matches,
-  );
-
-  // ファイル入力要素をクリアするための ref
   const fileInputRef = useRef(null);
+  const ratioRef = useRef(DEFAULT_RATIO);
 
-  // テーブルの参照（PNG 書き出し用）
-  const tableRef = useRef(null);
-  const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+  useEffect(() => {
+    const widthValue = parseNumeric(widthInput);
+    const heightValue = parseNumeric(heightInput);
+    if (Number.isFinite(widthValue) && Number.isFinite(heightValue) && heightValue) {
+      ratioRef.current = widthValue / heightValue;
+    }
+  }, [widthInput, heightInput]);
 
-  // refs for latest handlers (used by hotkeys)
-  const handlersRef = useRef({});
+  useEffect(() => {
+    if (!lockAspect) return;
+    const widthValue = parseNumeric(widthInput);
+    const heightValue = parseNumeric(heightInput);
+    if (Number.isFinite(widthValue) && Number.isFinite(heightValue) && heightValue) {
+      ratioRef.current = widthValue / heightValue;
+    }
+  }, [lockAspect]);
 
-  // フィルタ条件のみリセット
-  const resetFilters = () => {
-    const today = DateTime.local().toISODate();
-    setDaysFilter(DEFAULT_SPAN_DAYS);
-    setStartDate(today);
-    setEndDate(
-      DateTime.fromISO(today).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-    );
-    setStatuses([]);
-    setKeyword("");
-    setSortField("締切");
-    setSortAsc(true);
+  useEffect(() => {
+    if (transparentBackground) return;
+    const colors = extractSvgColors(svgMarkup);
+    setAutoBackground(chooseNeutralBackground(colors));
+  }, [svgMarkup, transparentBackground]);
+
+  const unitDefinition = UNIT_DEFINITIONS.find((item) => item.value === unit);
+
+  const widthNumber = parseNumeric(widthInput);
+  const heightNumber = parseNumeric(heightInput);
+
+  const widthPx = Number.isFinite(widthNumber) && unitDefinition
+    ? unitDefinition.toPx(widthNumber)
+    : null;
+  const heightPx = Number.isFinite(heightNumber) && unitDefinition
+    ? unitDefinition.toPx(heightNumber)
+    : null;
+
+  const hasValidDimensions =
+    Number.isFinite(widthPx) && widthPx > 0 && Number.isFinite(heightPx) && heightPx > 0;
+
+  const baseWidth = hasValidDimensions ? widthPx : DEFAULT_WIDTH;
+  const baseHeight = hasValidDimensions ? heightPx : DEFAULT_HEIGHT;
+
+  const scale = Math.min(1, MAX_PREVIEW_SIZE / Math.max(baseWidth, baseHeight));
+  const drawingWidth = baseWidth * scale;
+  const drawingHeight = baseHeight * scale;
+
+  const leftMargin = showDimensionLines ? 88 : 36;
+  const topMargin = showDimensionLines ? 120 : 36;
+  const rightMargin = showDimensionLines ? 148 : 36;
+  const bottomMargin = showDimensionLines ? 72 : 36;
+
+  const canvasWidth = drawingWidth + leftMargin + rightMargin;
+  const canvasHeight = drawingHeight + topMargin + bottomMargin;
+
+  const contentX = leftMargin;
+  const contentY = topMargin;
+  const contentRight = contentX + drawingWidth;
+  const contentBottom = contentY + drawingHeight;
+
+  const dimensionGap = 24;
+  const extensionOvershoot = 14;
+
+  const processedSvg = useMemo(
+    () =>
+      sanitizeSvgMarkup(
+        svgMarkup,
+        Number.isFinite(widthNumber) ? widthNumber : DEFAULT_WIDTH,
+        Number.isFinite(heightNumber) ? heightNumber : DEFAULT_HEIGHT,
+        unit,
+      ),
+    [svgMarkup, widthNumber, heightNumber, unit],
+  );
+
+  const backgroundColor = transparentBackground ? "transparent" : autoBackground;
+  const overlayColor =
+    backgroundColor === "transparent" || backgroundBrightness(backgroundColor) > 150
+      ? "#111827"
+      : "#f8fafc";
+
+  const formattedWidth = useMemo(
+    () =>
+      formatDimension(widthInput, unit, {
+        round: roundDimensionValues,
+        showLabel: showDimensionLabels,
+        label: "幅",
+      }),
+    [widthInput, unit, roundDimensionValues, showDimensionLabels],
+  );
+
+  const formattedHeight = useMemo(
+    () =>
+      formatDimension(heightInput, unit, {
+        round: roundDimensionValues,
+        showLabel: showDimensionLabels,
+        label: "高さ",
+      }),
+    [heightInput, unit, roundDimensionValues, showDimensionLabels],
+  );
+
+  const handleWidthChange = (next) => {
+    setWidthInput(next);
+    if (!lockAspect) return;
+    const numeric = parseNumeric(next);
+    if (!Number.isFinite(numeric)) return;
+    const ratio = ratioRef.current || 1;
+    const linked = numeric / ratio;
+    if (Number.isFinite(linked)) {
+      setHeightInput(linked.toFixed(3).replace(/\.0+$/, "").replace(/\.$/, ""));
+    }
   };
 
-  // startDate または daysFilter が変わったら endDate を自動更新
-  useEffect(() => {
-    const sd = DateTime.fromISO(startDate);
-    setEndDate(sd.plus({ days: daysFilter }).toISODate());
-  }, [startDate, daysFilter]);
-
-  const prevStateRef = useRef(null);
-
-  // マウント時に履歴・sessionStorage から状態を復元
-  useEffect(() => {
-    const applyState = (state) => {
-      if (!state) return;
-      try {
-        const { data: raw, filters } = state;
-        const parsed = raw.map((r) => ({
-          ...r,
-          締切: DateTime.fromISO(r.締切, { zone: "Asia/Tokyo" }),
-        }));
-        setData(parsed);
-        setDaysFilter(filters.days);
-        setStartDate(filters.startDate);
-        setEndDate(filters.endDate);
-        setStatuses(filters.statuses);
-        setKeyword(filters.keyword);
-        if (filters.sortField) setSortField(filters.sortField);
-        if (typeof filters.sortAsc === "boolean") setSortAsc(filters.sortAsc);
-        prevStateRef.current = JSON.stringify(state);
-      } catch (e) {
-        console.error("State apply failed:", e);
-      }
-    };
-
-    const restore = () => {
-      let state = window.history.state;
-      if (!state) {
-        const stored = sessionStorage.getItem("webclass-todo");
-        if (stored) {
-          try {
-            state = JSON.parse(stored);
-          } catch {}
-        }
-      }
-      if (state) {
-        applyState(state);
-        window.history.replaceState(state, "");
-      }
-    };
-
-    restore();
-    window.addEventListener("pageshow", restore);
-    const onPop = (e) => applyState(e.state);
-    window.addEventListener("popstate", onPop);
-
-    return () => {
-      window.removeEventListener("pageshow", restore);
-      window.removeEventListener("popstate", onPop);
-    };
-  }, [preview]);
-
-  // Persist and push history
-  useEffect(() => {
-    const state = {
-      data: data.map((r) => ({
-        締切: r.締切.toISO(),
-        教材: r.教材,
-        コース名: r.コース名,
-        状態: r.状態,
-      })),
-      filters: {
-        days: daysFilter,
-        startDate,
-        endDate,
-        statuses,
-        keyword,
-        sortField,
-        sortAsc,
-      },
-    };
-    const json = JSON.stringify(state);
-    if (prevStateRef.current === null) {
-      window.history.replaceState(state, "");
-    } else if (prevStateRef.current !== json) {
-      window.history.pushState(state, "");
+  const handleHeightChange = (next) => {
+    setHeightInput(next);
+    if (!lockAspect) return;
+    const numeric = parseNumeric(next);
+    if (!Number.isFinite(numeric)) return;
+    const ratio = ratioRef.current || 1;
+    const linked = numeric * ratio;
+    if (Number.isFinite(linked)) {
+      setWidthInput(linked.toFixed(3).replace(/\.0+$/, "").replace(/\.$/, ""));
     }
-    prevStateRef.current = json;
+  };
 
-    if (data.length) {
-      sessionStorage.setItem("webclass-todo", json);
-    } else {
-      sessionStorage.removeItem("webclass-todo");
-    }
-  }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
+  const handleUnitChange = (value) => {
+    setUnit(value);
+  };
 
-  // Keep latest handlers for hotkeys
-  useEffect(() => {
-    handlersRef.current = {
-      exportCSV,
-      exportICS,
-      exportTodoist,
-      exportPNGTable,
-      exportPNGList,
-      closePreview,
-      confirmDownload,
-      resetFilters,
-    };
-  });
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      const h = handlersRef.current;
-      if (e.target.closest('input,textarea,select')) return;
-      if (e.key === 'Escape') {
-        h.closePreview();
-      } else if (e.key === 'Enter' && preview) {
-        e.preventDefault();
-        h.confirmDownload();
-      } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        fileInputRef.current?.click();
-      } else if (e.key === 'c' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportCSV();
-      } else if (e.key === 'i' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportICS();
-      } else if (e.key === 't' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportTodoist();
-      } else if (e.key === 'p' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportPNGTable(false);
-      } else if (e.key === 'l' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.exportPNGList();
-      } else if (e.key === 'r' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        h.resetFilters();
-      } else if (e.key === 'h' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        window.open('./usage.html', '_blank');
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [preview]);
-
-  // Global error handling
-  useEffect(() => {
-    const onError = (e) => {
-      console.error('Unhandled error:', e.error || e);
-      alert('エラーが発生しました: ' + (e.error?.message || e.message));
-    };
-    const onRejection = (e) => {
-      console.error('Unhandled promise rejection:', e.reason);
-      alert('エラーが発生しました: ' + e.reason);
-    };
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
-    return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
-    };
-  }, []);
-
-  // File upload parsing
-  const handleFile = (e) => {
-    const file = e.target.files?.[0];
+  const handleSvgUpload = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ({ target }) => {
-      const lines = target.result.split(/\r?\n/);
-      const idx = lines.findIndex((l) =>
-        l.startsWith('"学部","学科","コース名","教材","締切"'),
-      );
-      if (idx < 0) {
-        alert("ヘッダー行が見つかりません");
-        return;
+    reader.onload = (e) => {
+      const result = typeof e.target?.result === "string" ? e.target.result : "";
+      if (result.trim()) {
+        setSvgMarkup(result.trim());
       }
-      const csvText = lines.slice(idx).join("\n");
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: ({ data: rows, meta }) => {
-          const map = {
-            締切: ["締切", "締切日", "期限"],
-            教材: ["教材", "課題", "タイトル"],
-            コース名: ["コース名", "科目名", "講義名"],
-            状態: ["状態", "ステータス", "提出状況"],
-          };
-          const fieldMap = {};
-          Object.entries(map).forEach(([key, aliases]) => {
-            const found = meta.fields.find((f) => aliases.includes(f));
-            if (found) fieldMap[key] = found;
-          });
-          const missing = Object.keys(map).filter((k) => !fieldMap[k]);
-          if (missing.length) {
-            alert(`列が見つかりません: ${missing.join(", ")}`);
-            return;
-          }
-          const parsed = rows.map((r) => {
-            let dt = DateTime.fromISO(r[fieldMap["締切"]], {
-              zone: "Asia/Tokyo",
-            });
-            if (!dt.isValid)
-              dt = DateTime.fromFormat(
-                r[fieldMap["締切"]],
-                "yyyy-MM-dd HH:mm",
-                { zone: "Asia/Tokyo" },
-              );
-            return {
-              締切: dt,
-              教材: r[fieldMap["教材"]] || "",
-              コース名: r[fieldMap["コース名"]] || "",
-              状態: r[fieldMap["状態"]] || "",
-            };
-          });
-          setData(parsed);
-        },
-      });
     };
-    reader.readAsText(file, "utf-8");
+    reader.readAsText(file);
+    event.target.value = "";
   };
 
-  // Filter
-  const filtered = data
-    .filter((r) => r.締切.isValid)
-    .filter((r) => {
-      const d = r.締切;
-      const s = DateTime.fromISO(startDate);
-      const e = DateTime.fromISO(endDate);
-      return d >= s && d <= e;
-    })
-    .filter((r) => !statuses.length || statuses.includes(r.状態))
-    .filter(
-      (r) =>
-        !keyword || r.教材.includes(keyword) || r.コース名.includes(keyword),
-    )
-    .sort((a, b) => {
-      const va =
-        sortField === "締切" ? a.締切.toMillis() : a[sortField] || "";
-      const vb =
-        sortField === "締切" ? b.締切.toMillis() : b[sortField] || "";
-      if (va < vb) return sortAsc ? -1 : 1;
-      if (va > vb) return sortAsc ? 1 : -1;
-      return 0;
-    });
-
-  const nextDeadline = filtered.reduce((min, r) => {
-    if (!min || r.締切 < min) return r.締切;
-    return min;
-  }, null);
-
-  // Utils
-  const saveFile = (blob, name) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const resetSvg = () => {
+    setSvgMarkup(DEFAULT_SVG);
   };
 
-  const openPreview = (blob, name, mime) => {
-    if (mime === "text/csv") {
-      blob.text().then((text) => {
-        const { data: rows } = Papa.parse(text.trim());
-        setPreview({ name, mime, blob, rows });
-      });
-    } else {
-      const url = URL.createObjectURL(blob);
-      setPreview({ url, name, mime, blob });
-    }
-  };
-
-  const closePreview = () => {
-    if (preview?.url) URL.revokeObjectURL(preview.url);
-    setPreview(null);
-  };
-
-  const confirmDownload = () => {
-    if (preview) {
-      saveFile(preview.blob, preview.name);
-      closePreview();
-    }
-  };
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(true);
-    }
-  };
-
-  const exportCSV = () => {
-    try {
-      const csv = Papa.unparse(filtered, {
-        columns: ["締切", "教材", "コース名", "状態"],
-      });
-      const blob = new Blob([csv], { type: "text/csv" });
-      openPreview(blob, "todo_filtered.csv", "text/csv");
-    } catch (e) {
-      console.error(e);
-      alert("CSV の生成に失敗しました");
-    }
-  };
-
-  const exportICS = () => {
-    if (!filtered.length) return;
-    try {
-      const lines = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//WebClass ToDo//JP",
-      "CALSCALE:GREGORIAN",
-      "X-WR-TIMEZONE:Asia/Tokyo",
-      "BEGIN:VTIMEZONE",
-      "TZID:Asia/Tokyo",
-      "BEGIN:STANDARD",
-      "TZOFFSETFROM:+0900",
-      "TZOFFSETTO:+0900",
-      "TZNAME:JST",
-      "DTSTART:19700101T000000",
-      "END:STANDARD",
-      "END:VTIMEZONE",
-    ];
-      const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
-      filtered.forEach((r) => {
-        const dt = r.締切.setZone("Asia/Tokyo");
-        const dtStr = dt.toFormat("yyyyMMdd'T'HHmmss");
-        lines.push(
-          "BEGIN:VEVENT",
-          `UID:${uuidv4()}@webclass`,
-          `DTSTAMP:${now}`,
-          `DTSTART;TZID=Asia/Tokyo:${dtStr}`,
-          `SUMMARY:${r.教材} (${r.コース名})`,
-          "END:VEVENT",
-        );
-      });
-      lines.push("END:VCALENDAR");
-      downloadBlob(lines.join("\r\n"), "webclass_todo.ics", "text/calendar");
-    } catch (e) {
-      console.error(e);
-      alert("iCalendar の生成に失敗しました");
-    }
-  };
-
-  const exportTodoist = () => {
-    try {
-      const recs = filtered.map((r) => ({
-        TYPE: "task",
-        CONTENT: `${r.教材} (${r.コース名})`,
-        DATE: r.締切.toFormat("yyyy-MM-dd HH:mm"),
-        DATE_LANG: "ja",
-        TIMEZONE: "Asia/Tokyo",
-      }));
-      const csv = Papa.unparse(recs);
-      const blob = new Blob([csv], { type: "text/csv" });
-      openPreview(blob, "todoist_template.csv", "text/csv");
-    } catch (e) {
-      console.error(e);
-      alert("Todoist CSV の生成に失敗しました");
-    }
-  };
-
-  const exportPNGList = () => {
-    const wrapper = buildImageWrapper(true, filtered, tableRef);
-    captureAndPreview(wrapper, "webclass_todo_mobile.png", openPreview);
-  };
-
-  const exportPNGTable = (isMobile) => {
-    const name = isMobile
-      ? "webclass_todo_mobile.png"
-      : "webclass_todo_table.png";
-    const wrapper = buildImageWrapper(isMobile, filtered, tableRef);
-    captureAndPreview(wrapper, name, openPreview);
-  };
-
-  const shareToReminders = () => {
-    try {
-      if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
-      const { error, value } = createEvents({
-        events: filtered.map((r) => ({
-          start: [
-            r.締切.year,
-            r.締切.month,
-            r.締切.day,
-            r.締切.hour,
-            r.締切.minute,
-          ],
-          title: `${r.教材} (${r.コース名})`,
-        })),
-      });
-      if (!error) {
-        const file = new File(
-          [new Blob([value], { type: "text/calendar" })],
-          "webclass_todo.ics",
-        );
-        navigator.share({ files: [file], title: "WebClass To-Do" });
-      }
-    } catch (e) {
-      console.error(e);
-      alert("共有に失敗しました");
-    }
-  };
-
-  // ファイル選択＆抽出結果をリセット
-  const clearFile = () => {
-    setData([]);
-
-    // 抽出条件のリセット
-    resetFilters();
-
-    sessionStorage.removeItem("webclass-todo");
-
-    const state = { data: [], filters: {
-      days: DEFAULT_SPAN_DAYS,
-      startDate: TODAY,
-      endDate: DateTime.fromISO(TODAY).plus({ days: DEFAULT_SPAN_DAYS }).toISODate(),
-      statuses: [],
-      keyword: "",
-      sortField: "締切",
-      sortAsc: true,
-    }};
-    window.history.replaceState(state, "");
-    prevStateRef.current = JSON.stringify(state);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  // Render
   return (
-    <>
-      <div className="container">
-        <header>
-          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>📋 WebClass To-Do</h1>
-          {/* ファイル解除ボタンはデータ読み込み後だけ表示 */}
-          {data.length > 0 && (
-            <button onClick={clearFile} style={{ marginLeft: "1rem" }}>
-              🚪 ファイル選択解除
-            </button>
-          )}
-        </header>
-        {!data.length && (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFile}
-            />
-            <p>課題実施状況一覧のCSVを選択してください。</p>
-            <p>
-              <a href="./usage.html" target="_blank" rel="noopener" className="button">
-                使い方を見る
-              </a>
-            </p>
-          </>
-        )}
-        {data.length > 0 && (
-          <>
-            <aside className="sidebar">
-              <details
-                className="filter-accordion"
-                open={isFilterOpen}
-                onToggle={(e) => setIsFilterOpen(e.target.open)}
-              >
-                <summary>🔍 抽出条件</summary>
-                <div className="filter-fields">
-                  <label htmlFor="daysFilter">期間を指定（日）:</label>
-                  <div className="number-spinner">
-                    <button
-                      type="button"
-                      onClick={() => setDaysFilter((d) => Math.max(0, d - 1))}
-                      aria-label="減らす"
-                    >
-                      −
-                    </button>
-                    <input
-                      id="daysFilter"
-                      type="number"
-                      min={0}
-                      value={daysFilter}
-                      onChange={(e) => setDaysFilter(Number(e.target.value))}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setDaysFilter((d) => d + 1)}
-                      aria-label="増やす"
-                    >
-                      ＋
-                    </button>
-                  </div>
-                  <label>
-                    開始日:
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    終了日:
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    状態で絞り込み:
-                    <select
-                      multiple
-                      value={statuses}
-                      onChange={(e) =>
-                        setStatuses(
-                          Array.from(e.target.selectedOptions, (o) => o.value),
-                        )
-                      }
-                    >
-                      {[...new Set(data.map((r) => r.状態))].map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    キーワード:
-                    <input
-                      type="text"
-                      placeholder="例: Python"
-                      value={keyword}
-                      onChange={(e) => setKeyword(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    className="reset-btn"
-                  >
-                    条件リセット
-                  </button>
-                </div>
-              </details>
-            </aside>
-            <main className="main">
-              <div className="metrics">
-                <span>抽出件数: {filtered.length}</span>
-                {nextDeadline && (
-                  <span>次の締切: {nextDeadline.toFormat("yyyy-MM-dd")}</span>
-                )}
-              </div>
-              <div
-                className="table-container"
-                ref={tableRef}
-                style={{ overflowX: "auto" }}
-              >
-                <table style={{ fontSize: "0.875rem", lineHeight: "1.4" }}>
-                  <thead>
-                    <tr>
-                      <th onClick={() => handleSort("締切")} className="sortable">
-                        締切
-                        {sortField === "締切" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("教材")} className="sortable">
-                        教材
-                        {sortField === "教材" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("コース名")} className="sortable">
-                        コース名
-                        {sortField === "コース名" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                      <th onClick={() => handleSort("状態")} className="sortable">
-                        状態
-                        {sortField === "状態" && (
-                          <span className="arrow">{sortAsc ? "▲" : "▼"}</span>
-                        )}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} style={{ textAlign: "center" }}>
-                          該当するデータがありません
-                        </td>
-                      </tr>
-                    ) : (
-                      filtered.map((r, i) => (
-                        <tr key={i}>
-                          <td>{r.締切.toFormat("yyyy-MM-dd HH:mm")}</td>
-                          <td>{r.教材}</td>
-                          <td>{r.コース名}</td>
-                          <td>{r.状態}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="button-group">
-                <button onClick={exportCSV}>CSV ダウンロード</button>
-                <button onClick={exportICS}>
-                  iCalendar (.ics) ダウンロード
-                </button>
-                <button onClick={exportTodoist}>
-                  Todoist CSV ダウンロード
-                </button>
-                <button onClick={() => exportPNGTable(false)}>
-                  PNG（テーブル）
-                </button>
-                <button onClick={exportPNGList}>PNG（縦リスト）</button>
-              </div>
-              <div className="list-container">
-                {Object.entries(
-                  filtered.reduce((acc, r) => {
-                    const d = r.締切.toFormat("yyyy-MM-dd");
-                    acc[d] = acc[d] ? [...acc[d], r] : [r];
-                    return acc;
-                  }, {})
-                )
-                  .sort(([a], [b]) => (a < b ? -1 : 1))
-                  .map(([date, rows]) => (
-                    <div key={date} className="list-day">
-                      <h3 className="list-date">{date}</h3>
-                      {rows.map((r, i) => (
-                        <div key={i} className="list-item">
-                          <div className="list-title">{r.教材}</div>
-                          <div className="list-meta">
-                            <span>{r.締切.toFormat("HH:mm")}</span>
-                            <span>{r.コース名}</span>
-                            <span>{r.状態}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-              </div>
-            </main>
-          </>
-        )}
-      </div>
-      {preview && (
-        <div className="modal-overlay" onClick={closePreview}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            {preview.mime.startsWith("image/") ? (
-              <img
-                src={preview.url}
-                alt={preview.name}
-                style={{
-                  maxWidth: "80vw",
-                  maxHeight: "80vh",
-                  objectFit: "contain",
-                }}
+    <div className="app">
+      <header>
+        <h1>SVG 寸法ガイド</h1>
+        <p>寸法線を工業図面風に整え、単位や背景を柔軟に調整できます。</p>
+      </header>
+      <main className="layout">
+        <section className="panel">
+          <h2>基本設定</h2>
+          <div className="field">
+            <label htmlFor="unit">単位</label>
+            <select
+              id="unit"
+              value={unit}
+              onChange={(event) => handleUnitChange(event.target.value)}
+            >
+              {UNIT_DEFINITIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field-group">
+            <div className="field">
+              <label htmlFor="width">幅</label>
+              <input
+                id="width"
+                type="number"
+                inputMode="decimal"
+                value={widthInput}
+                onChange={(event) => handleWidthChange(event.target.value)}
               />
-            ) : preview.mime === "text/csv" ? (
-              <div className="csv-preview">
-                <table>
-                  <thead>
-                    <tr>
-                      {preview.rows[0].map((h, i) => (
-                        <th key={i}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.rows.slice(1).map((row, i) => (
-                      <tr key={i}>
-                        {row.map((cell, j) => (
-                          <td key={j}>{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <iframe
-                src={preview.url}
-                title="preview"
-                style={{ width: "80vw", height: "60vh", border: "none" }}
+            </div>
+            <div className="field">
+              <label htmlFor="height">高さ</label>
+              <input
+                id="height"
+                type="number"
+                inputMode="decimal"
+                value={heightInput}
+                onChange={(event) => handleHeightChange(event.target.value)}
               />
-            )}
-            <div style={{ textAlign: "right", marginTop: "1rem" }}>
-              <button onClick={confirmDownload} className="primary">
-                ダウンロード
-              </button>
-              <button onClick={closePreview} style={{ marginLeft: "0.5rem" }}>
-                閉じる
-              </button>
             </div>
           </div>
-        </div>
-      )}
-    </>
+          <div className="toggle-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={lockAspect}
+                onChange={(event) => setLockAspect(event.target.checked)}
+              />
+              アスペクト比を維持
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={transparentBackground}
+                onChange={(event) => setTransparentBackground(event.target.checked)}
+              />
+              背景を透過
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={showDimensionLines}
+                onChange={(event) => setShowDimensionLines(event.target.checked)}
+              />
+              寸法線を表示
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={showDimensionLabels}
+                onChange={(event) => setShowDimensionLabels(event.target.checked)}
+              />
+              寸法ラベル（幅/高さ）
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={roundDimensionValues}
+                onChange={(event) => setRoundDimensionValues(event.target.checked)}
+              />
+              寸法値を正数に丸める
+            </label>
+          </div>
+          <div className="background-info">
+            <span>背景色:</span>
+            <span className="swatch" style={{ backgroundColor }} />
+            <code>{transparentBackground ? "transparent" : backgroundColor}</code>
+          </div>
+        </section>
+        <section className="preview">
+          <h2>プレビュー</h2>
+          <div
+            className="preview-surface"
+            style={{
+              width: `${Math.max(canvasWidth, DEFAULT_WIDTH)}px`,
+              height: `${Math.max(canvasHeight, DEFAULT_HEIGHT)}px`,
+              backgroundColor,
+            }}
+          >
+            <div
+              className="svg-stage"
+              style={{
+                width: drawingWidth,
+                height: drawingHeight,
+                top: contentY,
+                left: contentX,
+              }}
+            >
+              {processedSvg ? (
+                <div
+                  className="svg-wrapper"
+                  dangerouslySetInnerHTML={{ __html: processedSvg }}
+                />
+              ) : (
+                <div className="invalid">SVG が正しく読み込めませんでした。</div>
+              )}
+            </div>
+            {showDimensionLines && hasValidDimensions && (
+              <svg
+                className="dimension-overlay"
+                width={canvasWidth}
+                height={canvasHeight}
+                viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
+                aria-hidden="true"
+              >
+                <defs>
+                  <marker
+                    id="arrow-head"
+                    markerWidth="10"
+                    markerHeight="10"
+                    refX="5"
+                    refY="5"
+                    orient="auto-start-reverse"
+                    markerUnits="strokeWidth"
+                  >
+                    <path d="M0,0 L10,5 L0,10 Z" fill={overlayColor} />
+                  </marker>
+                </defs>
+                <g stroke={overlayColor} strokeWidth="1.6" fill="none">
+                  <line
+                    x1={contentX}
+                    y1={contentY - extensionOvershoot}
+                    x2={contentX}
+                    y2={contentBottom + extensionOvershoot}
+                  />
+                  <line
+                    x1={contentRight}
+                    y1={contentY - extensionOvershoot}
+                    x2={contentRight}
+                    y2={contentBottom + extensionOvershoot}
+                  />
+                  <line
+                    x1={contentX}
+                    y1={contentY - dimensionGap}
+                    x2={contentRight}
+                    y2={contentY - dimensionGap}
+                    markerStart="url(#arrow-head)"
+                    markerEnd="url(#arrow-head)"
+                  />
+                  <line
+                    x1={contentRight - extensionOvershoot}
+                    y1={contentY}
+                    x2={contentRight + dimensionGap}
+                    y2={contentY}
+                  />
+                  <line
+                    x1={contentRight - extensionOvershoot}
+                    y1={contentBottom}
+                    x2={contentRight + dimensionGap}
+                    y2={contentBottom}
+                  />
+                  <line
+                    x1={contentRight + dimensionGap}
+                    y1={contentY}
+                    x2={contentRight + dimensionGap}
+                    y2={contentBottom}
+                    markerStart="url(#arrow-head)"
+                    markerEnd="url(#arrow-head)"
+                  />
+                </g>
+                <text
+                  x={(contentX + contentRight) / 2}
+                  y={contentY - dimensionGap - 12}
+                  fill={overlayColor}
+                  fontSize="13"
+                  fontWeight="600"
+                  textAnchor="middle"
+                >
+                  {formattedWidth}
+                </text>
+                <text
+                  fill={overlayColor}
+                  fontSize="13"
+                  fontWeight="600"
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  transform={`translate(${contentRight + dimensionGap}, ${
+                    (contentY + contentBottom) / 2
+                  }) rotate(-90) translate(0, -14)`}
+                >
+                  {formattedHeight}
+                </text>
+              </svg>
+            )}
+          </div>
+          <div className="svg-inputs">
+            <label htmlFor="svg-text">SVG コード</label>
+            <textarea
+              id="svg-text"
+              value={svgMarkup}
+              onChange={(event) => setSvgMarkup(event.target.value)}
+              rows={10}
+            />
+            <div className="svg-actions">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                SVG ファイルを読み込む
+              </button>
+              <button type="button" className="ghost" onClick={resetSvg}>
+                サンプルに戻す
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/svg+xml,.svg"
+                onChange={handleSvgUpload}
+                hidden
+              />
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
