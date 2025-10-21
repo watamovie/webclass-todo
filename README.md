@@ -1,64 +1,27 @@
-# WebClass To-Do 抽出ツール
+# SVG Dimension Assistant
 
-**WebClass の課題一覧 CSV から、To-Do タスクを抽出して整形・エクスポートできる Web アプリです。**  
-モバイル対応・インストール不要・サクサク動作。
+SVG をブラウザ上で読み込み、工業図面風の寸法線と自動選択された背景色でプレビューするためのシンプルなツールです。単位を切り替えても入力値が保持されるので、コンバートに気を使わずにサイズ感を調整できます。
 
+## ✨ 主な機能
 
+- 🧾 SVG マークアップを直接貼り付けてプレビュー
+- 📐 幅・高さの入力値を単位切り替え時も保持（px / mm）
+- 🎯 アスペクト比の維持や寸法線・ラベル表示をワンタップで切り替え
+- 🧮 寸法値の整数丸め ON/OFF
+- 🎨 SVG の配色から無彩色の背景色を自動提案
+- 🏭 工業図面フォーマットの矢印・寸法テキストを自動配置
 
----
+## 🚀 使い方
 
-## 🔧 主な機能
+1. `npm install`
+2. `npm run dev` で開発サーバーを起動
+3. ブラウザで SVG マークアップを貼り付けて各種設定を調整
 
-- 📂 CSV アップロード（WebClass 課題一覧）
-- 🔍 条件抽出（締切・状態・キーワード）
-- 📅 エクスポート形式
-  - iCalendar (.ics)
-  - Todoist インポートCSV
-  - PNG（縦／表形式）
-- 📱 iPhone Safari でも動作確認済み
-- ☁️ [Cloudflare Pages でホスティング中](https://webclass-todo.pages.dev)
+## 🛠 技術スタック
 
----
+- [Vite](https://vitejs.dev/)
+- [React](https://react.dev/)
 
-## ⌨️ キーボードショートカット
+## 📄 ライセンス
 
-| 操作                        | ショートカット                     |
-|-----------------------------|------------------------------------|
-| ファイルを開く              | `Ctrl/Cmd + O`                     |
-| CSV エクスポート            | `Ctrl/Cmd + Shift + C`             |
-| iCalendar エクスポート      | `Ctrl/Cmd + Shift + I`             |
-| Todoist CSV エクスポート    | `Ctrl/Cmd + Shift + T`             |
-| PNG（テーブル）エクスポート | `Ctrl/Cmd + Shift + P`             |
-| PNG（縦リスト）エクスポート | `Ctrl/Cmd + Shift + L`             |
-| ヘルプ表示                  | `Ctrl/Cmd + H`                     |
-| プレビューを閉じる          | `Esc`                              |
-| プレビューでダウンロード           | `Enter` (プレビュー表示中) |
-| フィルタリセット           | `Ctrl/Cmd + Shift + R` |
-
----
-
-## 📦 技術スタック
-
-| 技術       | 用途               |
-|------------|--------------------|
-| [Vite](https://vitejs.dev/)       | フロントエンドビルド         |
-| React      | UI コンポーネント         |
-| Luxon      | 日付操作（タイムゾーン対応） |
-| PapaParse  | CSVパース           |
-| html2canvas| PNG 画像化         |
-| ics        | iCalendar 生成      |
-
----
-
-## 🚀 開発・ビルド手順
-
-```bash
-# 依存パッケージのインストール
-npm install
-
-# 開発サーバー起動（http://localhost:5173）
-npm run dev
-
-# ビルド（dist フォルダ生成）
-npm run build
-```
+MIT License
