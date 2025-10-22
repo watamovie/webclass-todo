@@ -530,6 +530,165 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* ---------------- SVG Tools ---------------- */
+.svg-tools {
+  grid-column: 1 / -1;
+  margin-top: var(--gap);
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.svg-tools__header h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: clamp(1.2rem, 2vw + 0.8rem, 1.5rem);
+}
+
+.svg-tools__header p {
+  margin: 0.5rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.svg-tools__inputs {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.svg-tools__file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.svg-tools__file input[type="file"] {
+  font-size: 0.95rem;
+}
+
+.svg-tools__file-name {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.svg-tools textarea {
+  width: 100%;
+  min-height: 160px;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.svg-tools textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 65%, transparent);
+  outline-offset: 2px;
+}
+
+.svg-tools__controls {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.svg-tools__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.svg-tools__color {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.svg-tools__color input[type="text"] {
+  width: 7rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+}
+
+.svg-tools__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.svg-tools__error {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: rgba(248, 113, 113, 0.15);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.svg-tools__result {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.svg-tools__preview {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover);
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.svg-tools__preview svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.svg-tools__output textarea {
+  min-height: 200px;
+  background: var(--surface-hover);
+}
+
+.svg-tools__output button {
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .svg-tools__result {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .svg-tools__error {
+    background: rgba(248, 113, 113, 0.25);
+    color: #fca5a5;
+  }
+}
+
 /* ---------------- Preview Modal ---------------- */
 .modal-overlay {
   position: fixed;
