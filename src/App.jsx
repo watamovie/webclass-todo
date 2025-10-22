@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createEvents } from "ics";
 // import domtoimage from 'dom-to-image';
 import html2canvas from "html2canvas";
+import SvgTools from "./components/SvgTools";
 
 const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
 const DEFAULT_SPAN_DAYS = 7; // 期間
@@ -911,9 +912,11 @@ export default function App() {
             </main>
           </>
         )}
-      </div>
-      {preview && (
-        <div className="modal-overlay" onClick={closePreview}>
+
+      <SvgTools />
+    </div>
+    {preview && (
+      <div className="modal-overlay" onClick={closePreview}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             {preview.mime.startsWith("image/") ? (
               <img
