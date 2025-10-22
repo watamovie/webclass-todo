@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
@@ -8,6 +8,10 @@ import html2canvas from "html2canvas";
 
 const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
 const DEFAULT_SPAN_DAYS = 7; // 期間
+const REMINDER_SHORTCUT_NAME = "WebClass Reminders";
+const REMINDER_INSTALL_URL =
+  "https://www.icloud.com/shortcuts/fdadcf1171ad4a8a82f7b2d6f494a57f";
+const REMINDER_EXCLUDED_STATUSES = ["合格", "回答済み"];
 
 function useDefaultFilters() {
   const [days, setDays] = useState(DEFAULT_SPAN_DAYS);
@@ -284,7 +288,8 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e) => {
       const h = handlersRef.current;
-      if (e.target.closest('input,textarea,select')) return;
+      const isFormElement = e.target.closest('input,textarea,select');
+      if (isFormElement && e.key !== 'Escape') return;
       if (e.key === 'Escape') {
         h.closePreview();
       } else if (e.key === 'Enter' && preview) {
@@ -469,6 +474,82 @@ export default function App() {
       setSortField(field);
       setSortAsc(true);
     }
+  };
+
+  const runReminderShortcut = useCallback((items) => {
+    if (!items.length) {
+      alert("送信できる項目がありません。");
+      return false;
+    }
+    if (typeof window === "undefined") return false;
+    const ua = window.navigator?.userAgent || "";
+    const isIOS = /iP(hone|od|ad)/.test(ua);
+    if (!isIOS) {
+      alert("iPhone / iPad の Safari からアクセスして実行してください。");
+      return false;
+    }
+    const payload = JSON.stringify({
+      tasks: items.map((item) => ({
+        title: `${item.教材} (${item.コース名})`,
+        note: `状態: ${item.状態 || "未設定"}`,
+        dueDate: item.締切.setZone("Asia/Tokyo").toISO(),
+      })),
+    });
+    const url = `shortcuts://run-shortcut?name=${encodeURIComponent(
+      REMINDER_SHORTCUT_NAME,
+    )}&input=text&text=${encodeURIComponent(payload)}`;
+
+    let fallbackTimer = 0;
+    let didLeavePage = false;
+
+    function cleanup() {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        didLeavePage = true;
+        cleanup();
+      }
+    }
+
+    function handlePageHide() {
+      didLeavePage = true;
+      cleanup();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+
+    fallbackTimer = window.setTimeout(() => {
+      if (!didLeavePage) {
+        cleanup();
+        const shouldInstall = window.confirm(
+          "ショートカットを起動できませんでした。インストールページを開きますか？",
+        );
+        if (shouldInstall) {
+          window.location.href = REMINDER_INSTALL_URL;
+        }
+      }
+    }, 2000);
+
+    window.location.href = url;
+    return true;
+  }, []);
+
+  const handleReminderButtonClick = () => {
+    const exclusions = new Set(
+      REMINDER_EXCLUDED_STATUSES.map((status) => status.trim()),
+    );
+    const items = filtered.filter((item) => {
+      const status = (item.状態 || "").trim();
+      return !exclusions.has(status);
+    });
+    runReminderShortcut(items);
   };
 
   const exportCSV = () => {
@@ -798,6 +879,9 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
+                <button onClick={handleReminderButtonClick} className="primary">
+                  📲 リマインダーに追加
+                </button>
               </div>
               <div className="list-container">
                 {Object.entries(
