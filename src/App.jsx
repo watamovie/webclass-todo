@@ -133,6 +133,286 @@ const captureAndPreview = async (wrapper, name, openPreview) => {
   }
 };
 
+const parseLength = (value) => {
+  if (value == null) return null;
+  const num = parseFloat(String(value));
+  return Number.isFinite(num) ? num : null;
+};
+
+const getCanvasDimensions = (svgEl) => {
+  if (!svgEl) return { width: null, height: null };
+  let width = parseLength(svgEl.getAttribute("width"));
+  let height = parseLength(svgEl.getAttribute("height"));
+  const viewBox = svgEl.getAttribute("viewBox");
+  if (viewBox) {
+    const parts = viewBox
+      .trim()
+      .split(/[\s,]+/)
+      .map((n) => Number(n))
+      .filter((n) => !Number.isNaN(n));
+    if (parts.length === 4) {
+      if (width == null) width = parts[2];
+      if (height == null) height = parts[3];
+    }
+  }
+  return { width, height };
+};
+
+const approxEqual = (a, b, tolerance) => {
+  if (a == null || b == null) return false;
+  return Math.abs(a - b) <= tolerance;
+};
+
+const removeCanvasSizedBackgrounds = (svgEl, width, height) => {
+  if (width == null || height == null) {
+    return { removed: 0, attempted: false };
+  }
+  const rects = Array.from(svgEl.querySelectorAll("rect"));
+  let removed = 0;
+  const tolW = Math.max(Math.abs(width) * 0.001, 0.01);
+  const tolH = Math.max(Math.abs(height) * 0.001, 0.01);
+  const tolPos = Math.max(Math.abs(width), Math.abs(height), 1) * 0.001;
+  rects.forEach((rect) => {
+    if (rect.closest("defs")) return;
+    const w = parseLength(rect.getAttribute("width"));
+    const h = parseLength(rect.getAttribute("height"));
+    const x = parseLength(rect.getAttribute("x")) || 0;
+    const y = parseLength(rect.getAttribute("y")) || 0;
+    if (
+      w != null &&
+      h != null &&
+      approxEqual(w, width, tolW) &&
+      approxEqual(h, height, tolH) &&
+      Math.abs(x) <= tolPos &&
+      Math.abs(y) <= tolPos
+    ) {
+      rect.parentNode?.removeChild(rect);
+      removed += 1;
+    }
+  });
+  return { removed, attempted: true };
+};
+
+const overrideFillInStyle = (style, fillColor) => {
+  const declarations = style
+    .split(";")
+    .map((d) => d.trim())
+    .filter(Boolean);
+  let found = false;
+  const next = declarations.map((decl) => {
+    const [prop, ...rest] = decl.split(":");
+    if (!prop || rest.length === 0) return decl;
+    const key = prop.trim();
+    const value = rest.join(":").trim();
+    if (key.toLowerCase() === "fill") {
+      found = true;
+      return `${key}: ${fillColor}`;
+    }
+    return `${key}: ${value}`;
+  });
+  if (!found) {
+    next.push(`fill: ${fillColor}`);
+  }
+  return next.join("; ");
+};
+
+const applyFillColorToSvg = (svgEl, fillColor) => {
+  const selector = "path, rect, circle, ellipse, polygon, polyline, use";
+  const elements = Array.from(svgEl.querySelectorAll(selector));
+  let updated = 0;
+  elements.forEach((el) => {
+    if (el.closest("defs")) return;
+    el.setAttribute("fill", fillColor);
+    const style = el.getAttribute("style");
+    if (style) {
+      el.setAttribute("style", overrideFillInStyle(style, fillColor));
+    }
+    updated += 1;
+  });
+  return updated;
+};
+
+function SvgTools() {
+  const [svgInput, setSvgInput] = useState("");
+  const [svgOutput, setSvgOutput] = useState("");
+  const [removeBackground, setRemoveBackground] = useState(true);
+  const [applyFill, setApplyFill] = useState(true);
+  const [fillColor, setFillColor] = useState("#000000");
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [downloadName, setDownloadName] = useState("edited.svg");
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ({ target }) => {
+      if (typeof target?.result !== "string") return;
+      setSvgInput(target.result);
+      setSvgOutput("");
+      setStatus("");
+      setError("");
+    };
+    reader.readAsText(file, "utf-8");
+    const baseName = file.name.replace(/\.svg$/i, "");
+    setDownloadName(`${baseName || "svg"}-edited.svg`);
+  };
+
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleProcess = () => {
+    setError("");
+    setStatus("");
+    if (!svgInput.trim()) {
+      setError("SVG を入力してください。");
+      return;
+    }
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgInput, "image/svg+xml");
+      const parseError = doc.querySelector("parsererror");
+      if (parseError) {
+        throw new Error(parseError.textContent || "SVG の解析に失敗しました。");
+      }
+      const svgEl = doc.querySelector("svg");
+      if (!svgEl) {
+        throw new Error("<svg> 要素が見つかりませんでした。");
+      }
+      const { width, height } = getCanvasDimensions(svgEl);
+      const statusParts = [];
+      if (removeBackground) {
+        const { removed, attempted } = removeCanvasSizedBackgrounds(
+          svgEl,
+          width,
+          height,
+        );
+        if (!attempted) {
+          statusParts.push("キャンバスサイズを取得できなかったため背景を削除できませんでした。");
+        } else if (removed) {
+          statusParts.push(`背景矩形を ${removed} 件削除しました。`);
+        } else {
+          statusParts.push("削除対象の背景は見つかりませんでした。");
+        }
+      }
+      if (applyFill) {
+        const changed = applyFillColorToSvg(svgEl, fillColor);
+        statusParts.push(
+          changed
+            ? `図形 ${changed} 件の塗りつぶしを ${fillColor} に変更しました。`
+            : "塗りつぶしを変更する図形が見つかりませんでした。",
+        );
+      }
+      const serializer = new XMLSerializer();
+      const xmlDeclMatch = svgInput.match(/^\s*<\?xml[^>]*>/i);
+      const serialized = serializer.serializeToString(svgEl);
+      const output = (xmlDeclMatch ? `${xmlDeclMatch[0]}\n` : "") + serialized;
+      setSvgOutput(output);
+      setStatus(statusParts.filter(Boolean).join(" / ") || "変更はありませんでした。");
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : String(err));
+      setSvgOutput("");
+    }
+  };
+
+  const handleDownload = () => {
+    if (!svgOutput) return;
+    downloadBlob(svgOutput, downloadName, "image/svg+xml");
+  };
+
+  const handleClear = () => {
+    setSvgInput("");
+    setSvgOutput("");
+    setStatus("");
+    setError("");
+    setDownloadName("edited.svg");
+    resetFileInput();
+  };
+
+  return (
+    <section className="svg-tools" aria-labelledby="svg-tools-heading">
+      <h2 id="svg-tools-heading">🖼️ SVG ツール</h2>
+      <p>
+        SVG の背景を削除したり、塗りつぶし色を一括変更するための簡易ツールです。
+        ファイルを読み込むかソースコードを貼り付けてから実行してください。
+      </p>
+      <div className="svg-tools-controls">
+        <div className="svg-tools-options">
+          <label>
+            <input type="checkbox" checked={removeBackground} onChange={(e) => setRemoveBackground(e.target.checked)} />
+            キャンバスと同じサイズの背景を削除
+          </label>
+          <label>
+            <input type="checkbox" checked={applyFill} onChange={(e) => setApplyFill(e.target.checked)} />
+            塗りつぶし色を一括変更
+          </label>
+          <input
+            type="color"
+            value={fillColor}
+            onChange={(e) => setFillColor(e.target.value)}
+            disabled={!applyFill}
+            aria-label="塗りつぶし色"
+          />
+          <span className="svg-tools-color-value">{fillColor}</span>
+        </div>
+        <div className="svg-tools-file-row">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".svg,image/svg+xml"
+            onChange={handleFileChange}
+          />
+          <div className="svg-tools-action-buttons">
+            <button type="button" onClick={handleProcess} disabled={!svgInput.trim()}>
+              変換を実行
+            </button>
+            <button type="button" onClick={handleClear}>
+              クリア
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="svg-tools-textareas">
+        <div>
+          <h3>入力 SVG</h3>
+          <textarea
+            value={svgInput}
+            onChange={(e) => setSvgInput(e.target.value)}
+            placeholder="SVG のソースを貼り付けるか、ファイルを選択してください。"
+          />
+        </div>
+        <div>
+          <h3>変換結果</h3>
+          <textarea
+            value={svgOutput}
+            onChange={(e) => setSvgOutput(e.target.value)}
+            placeholder="変換結果がここに表示されます。"
+          />
+          <div className="svg-tools-actions">
+            <button type="button" onClick={handleDownload} disabled={!svgOutput}>
+              SVG をダウンロード
+            </button>
+            {status && <span className="svg-tools-status">{status}</span>}
+          </div>
+          <div className="svg-tools-preview">
+            {svgOutput ? (
+              <div dangerouslySetInnerHTML={{ __html: svgOutput }} />
+            ) : (
+              <span className="svg-tools-empty-preview">ここにプレビューが表示されます。</span>
+            )}
+          </div>
+        </div>
+      </div>
+      {error && <div className="svg-tools-error">{error}</div>}
+    </section>
+  );
+}
+
 export default function App() {
   // State
   const [data, setData] = useState([]);
@@ -912,6 +1192,7 @@ export default function App() {
           </>
         )}
       </div>
+      <SvgTools />
       {preview && (
         <div className="modal-overlay" onClick={closePreview}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
