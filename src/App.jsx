@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
-import { createEvents } from "ics";
 // import domtoimage from 'dom-to-image';
 import html2canvas from "html2canvas";
 
@@ -53,6 +52,12 @@ function downloadBlob(data, fileName, mimeType) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+const escapeICSText = (value = "") =>
+  String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/[;,]/g, (match) => `\\${match}`);
 
 // ------ Image helper utilities ------
 const getThemeColors = () => {
@@ -155,6 +160,12 @@ export default function App() {
   // テーブルの参照（PNG 書き出し用）
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminderSortField, setReminderSortField] = useState("締切");
+  const [reminderSortAsc, setReminderSortAsc] = useState(true);
+  const [reminderStatuses, setReminderStatuses] = useState([]);
+  const [isAddingReminders, setIsAddingReminders] = useState(false);
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
@@ -398,6 +409,11 @@ export default function App() {
   };
 
   // Filter
+  const statusOptions = useMemo(
+    () => Array.from(new Set(data.map((r) => r.状態 || ""))),
+    [data],
+  );
+
   const filtered = data
     .filter((r) => r.締切.isValid)
     .filter((r) => {
@@ -420,6 +436,38 @@ export default function App() {
       if (va > vb) return sortAsc ? 1 : -1;
       return 0;
     });
+
+  const defaultReminderStatuses = useCallback(() => {
+    if (!statusOptions.length) return [];
+    const excludeKeywords = ["合格", "実施済"];
+    const defaults = statusOptions.filter((status) => {
+      if (!status) return true;
+      return !excludeKeywords.some((keyword) => status.includes(keyword));
+    });
+    return defaults.length ? defaults : [...statusOptions];
+  }, [statusOptions]);
+
+  const reminderTargets = useMemo(() => {
+    const base = reminderStatuses.length
+      ? filtered.filter((item) =>
+          reminderStatuses.includes(item.状態 || ""),
+        )
+      : filtered;
+    const sorted = [...base].sort((a, b) => {
+      const left =
+        reminderSortField === "締切"
+          ? a.締切.toMillis()
+          : a[reminderSortField] || "";
+      const right =
+        reminderSortField === "締切"
+          ? b.締切.toMillis()
+          : b[reminderSortField] || "";
+      if (left < right) return reminderSortAsc ? -1 : 1;
+      if (left > right) return reminderSortAsc ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filtered, reminderStatuses, reminderSortField, reminderSortAsc]);
 
   const nextDeadline = filtered.reduce((min, r) => {
     if (!min || r.締切 < min) return r.締切;
@@ -555,31 +603,122 @@ export default function App() {
     captureAndPreview(wrapper, name, openPreview);
   };
 
-  const shareToReminders = () => {
-    try {
-      if (!navigator.canShare || !navigator.canShare({ files: [] })) return;
-      const { error, value } = createEvents({
-        events: filtered.map((r) => ({
-          start: [
-            r.締切.year,
-            r.締切.month,
-            r.締切.day,
-            r.締切.hour,
-            r.締切.minute,
-          ],
-          title: `${r.教材} (${r.コース名})`,
-        })),
-      });
-      if (!error) {
-        const file = new File(
-          [new Blob([value], { type: "text/calendar" })],
-          "webclass_todo.ics",
-        );
-        navigator.share({ files: [file], title: "WebClass To-Do" });
+  const openReminderModal = () => {
+    setReminderSortField(sortField);
+    setReminderSortAsc(sortAsc);
+    setReminderStatuses(defaultReminderStatuses());
+    setIsReminderModalOpen(true);
+  };
+
+  const closeReminderModal = () => {
+    setIsReminderModalOpen(false);
+    setIsAddingReminders(false);
+  };
+
+  const toggleReminderStatus = (status) => {
+    setReminderStatuses((prev) => {
+      if (prev.includes(status)) {
+        return prev.filter((s) => s !== status);
       }
-    } catch (e) {
-      console.error(e);
-      alert("共有に失敗しました");
+      return [...prev, status];
+    });
+  };
+
+  const setAllReminderStatuses = (value) => {
+    if (value) {
+      setReminderStatuses([...statusOptions]);
+    } else {
+      setReminderStatuses([]);
+    }
+  };
+
+  const reminderStatusLabel = (status) => status || "（未設定）";
+
+  const handleReminderConfirm = async () => {
+    if (!reminderTargets.length) {
+      alert("追加対象がありません");
+      return;
+    }
+    setIsAddingReminders(true);
+    try {
+      const now = DateTime.utc().toFormat("yyyyMMdd'T'HHmmss'Z'");
+      const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//WebClass ToDo//JP",
+        "CALSCALE:GREGORIAN",
+        "X-WR-TIMEZONE:Asia/Tokyo",
+        "BEGIN:VTIMEZONE",
+        "TZID:Asia/Tokyo",
+        "BEGIN:STANDARD",
+        "TZOFFSETFROM:+0900",
+        "TZOFFSETTO:+0900",
+        "TZNAME:JST",
+        "DTSTART:19700101T000000",
+        "END:STANDARD",
+        "END:VTIMEZONE",
+      ];
+      reminderTargets.forEach((item) => {
+        const due = item.締切.setZone("Asia/Tokyo");
+        const dueStr = due.toFormat("yyyyMMdd'T'HHmmss");
+        const summary = item.コース名
+          ? `${item.教材} (${item.コース名})`
+          : item.教材;
+        const descriptionParts = [
+          `締切: ${due.toFormat("yyyy-MM-dd HH:mm")}`,
+        ];
+        if (item.状態) {
+          descriptionParts.push(`状態: ${item.状態}`);
+        }
+        lines.push(
+          "BEGIN:VTODO",
+          `UID:${uuidv4()}@webclass`,
+          `DTSTAMP:${now}`,
+          `SUMMARY:${escapeICSText(summary)}`,
+          `DUE;TZID=Asia/Tokyo:${dueStr}`,
+          `DESCRIPTION:${escapeICSText(descriptionParts.join("\n"))}`,
+          "END:VTODO",
+        );
+      });
+      lines.push("END:VCALENDAR");
+
+      const ics = lines.join("\r\n");
+      const blob = new Blob([ics], { type: "text/calendar" });
+      const fileName = `webclass_reminders_${DateTime.local().toFormat(
+        "yyyyMMdd_HHmm",
+      )}.ics`;
+      const file = new File([blob], fileName, { type: "text/calendar" });
+      const shareData = { files: [file], title: "WebClass To-Do" };
+
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        await navigator.share({
+          ...shareData,
+          text: "抽出済みの課題をリマインダーに追加します",
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        link.rel = "noreferrer";
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+          alert(
+            "ダウンロードした .ics ファイルを開くとリマインダーに取り込めます",
+          );
+        }
+      }
+
+      closeReminderModal();
+    } catch (error) {
+      console.error(error);
+      alert("リマインダーの追加に失敗しました");
+    } finally {
+      setIsAddingReminders(false);
     }
   };
 
@@ -699,9 +838,9 @@ export default function App() {
                         )
                       }
                     >
-                      {[...new Set(data.map((r) => r.状態))].map((s) => (
-                        <option key={s} value={s}>
-                          {s}
+                      {statusOptions.map((s, index) => (
+                        <option key={`${s || "empty"}-${index}`} value={s}>
+                          {reminderStatusLabel(s)}
                         </option>
                       ))}
                     </select>
@@ -798,6 +937,13 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
+                <button
+                  onClick={openReminderModal}
+                  disabled={!filtered.length}
+                  className="primary"
+                >
+                  📲 リマインダーに一括追加
+                </button>
               </div>
               <div className="list-container">
                 {Object.entries(
@@ -828,6 +974,129 @@ export default function App() {
           </>
         )}
       </div>
+      {isReminderModalOpen && (
+        <div className="modal-overlay" onClick={closeReminderModal}>
+          <div
+            className="modal reminder-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>リマインダーに追加</h2>
+            <p className="reminder-intro">
+              現在の抽出条件で表示されている課題をまとめてリマインダーに送信します。
+            </p>
+            <div className="reminder-form">
+              <div className="reminder-field">
+                <div className="reminder-field-header">
+                  <h3>対象の状態</h3>
+                  <div className="reminder-status-actions">
+                    <button
+                      type="button"
+                      onClick={() => setReminderStatuses(defaultReminderStatuses())}
+                    >
+                      推奨選択
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllReminderStatuses(true)}
+                    >
+                      全て選択
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllReminderStatuses(false)}
+                    >
+                      全て解除
+                    </button>
+                  </div>
+                </div>
+                <div className="reminder-status-list">
+                  {statusOptions.length ? (
+                    statusOptions.map((status, index) => (
+                      <label
+                        key={`${status || "empty"}-${index}`}
+                        className="reminder-status-option"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={reminderStatuses.includes(status)}
+                          onChange={() => toggleReminderStatus(status)}
+                        />
+                        <span>{reminderStatusLabel(status)}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="reminder-status-empty">状態の選択肢はありません。</p>
+                  )}
+                </div>
+              </div>
+              <div className="reminder-field">
+                <h3>ソート設定</h3>
+                <div className="reminder-sort-controls">
+                  <select
+                    value={reminderSortField}
+                    onChange={(e) => setReminderSortField(e.target.value)}
+                  >
+                    <option value="締切">締切</option>
+                    <option value="教材">教材</option>
+                    <option value="コース名">コース名</option>
+                    <option value="状態">状態</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="sort-toggle"
+                    onClick={() => setReminderSortAsc((v) => !v)}
+                  >
+                    {reminderSortAsc ? "昇順" : "降順"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="reminder-preview">
+              <h3>追加予定 ({reminderTargets.length}件)</h3>
+              <div className="reminder-preview-list">
+                {reminderTargets.length ? (
+                  reminderTargets.map((item, idx) => (
+                    <div
+                      key={`${item.教材}-${item.締切.toMillis()}-${idx}`}
+                      className="reminder-preview-item"
+                    >
+                      <div className="reminder-preview-title">{item.教材}</div>
+                      <div className="reminder-preview-meta">
+                        <span>{item.締切.toFormat("yyyy-MM-dd HH:mm")}</span>
+                        <span>{item.コース名}</span>
+                        <span>{reminderStatusLabel(item.状態)}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="reminder-empty">対象がありません。</p>
+                )}
+              </div>
+            </div>
+            <div className="reminder-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={handleReminderConfirm}
+                disabled={!reminderTargets.length || isAddingReminders}
+              >
+                {isAddingReminders ? "処理中..." : "リマインダーに追加"}
+              </button>
+              <button
+                type="button"
+                onClick={closeReminderModal}
+                disabled={isAddingReminders}
+              >
+                キャンセル
+              </button>
+            </div>
+            <p className="reminder-hint">
+              iOS 16.4以降のSafariでは共有メニューからリマインダーへ直接保存できます。
+              その他の環境ではダウンロードした .ics ファイルを手動で読み込んでください。
+            </p>
+          </div>
+        </div>
+      )}
       {preview && (
         <div className="modal-overlay" onClick={closePreview}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
