@@ -579,3 +579,124 @@ input[type="number"] {
   max-height: 80vh;
   object-fit: contain;
 }
+
+.reminder-modal h2 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.reminder-description {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.reminder-controls {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 480px) {
+  .reminder-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.reminder-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.reminder-controls select {
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: inherit;
+}
+
+.reminder-statuses {
+  margin-bottom: 1rem;
+}
+
+.reminder-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.reminder-status-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.reminder-status-actions button {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.reminder-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.reminder-status-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.reminder-preview-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover);
+  padding: 0.75rem;
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.reminder-preview-item {
+  margin-bottom: 0.75rem;
+}
+
+.reminder-preview-item:last-child {
+  margin-bottom: 0;
+}
+
+.reminder-preview-title {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.reminder-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.reminder-preview-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.reminder-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

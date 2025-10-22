@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
@@ -8,6 +8,8 @@ import html2canvas from "html2canvas";
 
 const TODAY = DateTime.local().toISODate(); // 例: "2025-07-19"
 const DEFAULT_SPAN_DAYS = 7; // 期間
+const REMINDER_SHORTCUT_NAME = "WebClass Reminders";
+const COMPLETION_STATUS_PATTERN = /(合格|実施|完了|済)/;
 
 function useDefaultFilters() {
   const [days, setDays] = useState(DEFAULT_SPAN_DAYS);
@@ -155,6 +157,10 @@ export default function App() {
   // テーブルの参照（PNG 書き出し用）
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+  const [isReminderModalOpen, setReminderModalOpen] = useState(false);
+  const [reminderSortField, setReminderSortField] = useState("締切");
+  const [reminderSortAsc, setReminderSortAsc] = useState(true);
+  const [reminderStatuses, setReminderStatuses] = useState([]);
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
@@ -277,6 +283,9 @@ export default function App() {
       closePreview,
       confirmDownload,
       resetFilters,
+      openReminderModal,
+      closeReminderModal,
+      confirmReminder: handleReminderConfirm,
     };
   });
 
@@ -284,9 +293,17 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e) => {
       const h = handlersRef.current;
-      if (e.target.closest('input,textarea,select')) return;
+      const isFormElement = e.target.closest('input,textarea,select');
+      if (isFormElement && e.key !== 'Escape') return;
       if (e.key === 'Escape') {
-        h.closePreview();
+        if (isReminderModalOpen) {
+          h.closeReminderModal();
+        } else {
+          h.closePreview();
+        }
+      } else if (e.key === 'Enter' && isReminderModalOpen) {
+        e.preventDefault();
+        h.confirmReminder();
       } else if (e.key === 'Enter' && preview) {
         e.preventDefault();
         h.confirmDownload();
@@ -318,7 +335,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [preview]);
+  }, [preview, isReminderModalOpen]);
 
   // Global error handling
   useEffect(() => {
@@ -421,6 +438,58 @@ export default function App() {
       return 0;
     });
 
+  const reminderStatusOptions = useMemo(() => {
+    const ordered = [];
+    filtered.forEach((r) => {
+      const value = r.状態 || "";
+      if (!ordered.includes(value)) {
+        ordered.push(value);
+      }
+    });
+    return ordered;
+  }, [filtered]);
+
+  useEffect(() => {
+    setReminderStatuses((prev) => {
+      const filteredStatuses = prev.filter((status) =>
+        reminderStatusOptions.includes(status),
+      );
+      if (
+        filteredStatuses.length === prev.length &&
+        filteredStatuses.every((status, index) => status === prev[index])
+      ) {
+        return prev;
+      }
+      return filteredStatuses;
+    });
+  }, [reminderStatusOptions]);
+
+  const getDefaultReminderStatuses = useCallback(() => {
+    const defaults = reminderStatusOptions.filter(
+      (status) => status && !COMPLETION_STATUS_PATTERN.test(status),
+    );
+    return defaults.length ? defaults : reminderStatusOptions;
+  }, [reminderStatusOptions]);
+
+  const reminderPreview = useMemo(() => {
+    const base =
+      reminderStatuses.length === 0
+        ? filtered
+        : filtered.filter((r) => reminderStatuses.includes(r.状態));
+    const sorted = [...base].sort((a, b) => {
+      const getValue = (record) =>
+        reminderSortField === "締切"
+          ? record.締切.toMillis()
+          : record[reminderSortField] || "";
+      const va = getValue(a);
+      const vb = getValue(b);
+      if (va < vb) return reminderSortAsc ? -1 : 1;
+      if (va > vb) return reminderSortAsc ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [filtered, reminderStatuses, reminderSortField, reminderSortAsc]);
+
   const nextDeadline = filtered.reduce((min, r) => {
     if (!min || r.締切 < min) return r.締切;
     return min;
@@ -468,6 +537,70 @@ export default function App() {
     } else {
       setSortField(field);
       setSortAsc(true);
+    }
+  };
+
+  const runReminderShortcut = useCallback((items) => {
+    if (!items.length) {
+      alert("送信できる項目がありません。");
+      return false;
+    }
+    if (typeof window === "undefined") return false;
+    const ua = window.navigator?.userAgent || "";
+    const isIOS = /iP(hone|od|ad)/.test(ua);
+    if (!isIOS) {
+      alert("iPhone / iPad の Safari からアクセスして実行してください。");
+      return false;
+    }
+    const payload = JSON.stringify({
+      tasks: items.map((item) => ({
+        title: `${item.教材} (${item.コース名})`,
+        note: `状態: ${item.状態 || "未設定"}`,
+        dueDate: item.締切.setZone("Asia/Tokyo").toISO(),
+      })),
+    });
+    const url = `shortcuts://run-shortcut?name=${encodeURIComponent(
+      REMINDER_SHORTCUT_NAME,
+    )}&input=text&text=${encodeURIComponent(payload)}`;
+    window.location.href = url;
+    return true;
+  }, []);
+
+  const openReminderModal = () => {
+    if (!filtered.length) {
+      alert("抽出中の課題がありません。");
+      return;
+    }
+    setReminderSortField(sortField);
+    setReminderSortAsc(sortAsc);
+    setReminderStatuses(getDefaultReminderStatuses());
+    setReminderModalOpen(true);
+  };
+
+  const closeReminderModal = () => {
+    setReminderModalOpen(false);
+  };
+
+  const toggleReminderStatus = (status) => {
+    setReminderStatuses((prev) =>
+      prev.includes(status)
+        ? prev.filter((s) => s !== status)
+        : [...prev, status],
+    );
+  };
+
+  const selectAllReminderStatuses = () => {
+    setReminderStatuses(reminderStatusOptions);
+  };
+
+  const applyDefaultReminderStatuses = () => {
+    setReminderStatuses(getDefaultReminderStatuses());
+  };
+
+  const handleReminderConfirm = () => {
+    const success = runReminderShortcut(reminderPreview);
+    if (success) {
+      setReminderModalOpen(false);
     }
   };
 
@@ -798,6 +931,9 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
+                <button onClick={openReminderModal} className="primary">
+                  📲 iPhoneリマインダーに一括追加
+                </button>
               </div>
               <div className="list-container">
                 {Object.entries(
@@ -828,6 +964,92 @@ export default function App() {
           </>
         )}
       </div>
+      {isReminderModalOpen && (
+        <div className="modal-overlay" onClick={closeReminderModal}>
+          <div
+            className="modal reminder-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2>iPhoneリマインダーに一括追加</h2>
+            <p className="reminder-description">
+              実行すると iOS ショートカット「{REMINDER_SHORTCUT_NAME}」が開き、表示中の課題を一括でリマインダーへ追加します。
+            </p>
+            <div className="reminder-controls">
+              <label>
+                並び替え対象
+                <select
+                  value={reminderSortField}
+                  onChange={(e) => setReminderSortField(e.target.value)}
+                >
+                  <option value="締切">締切</option>
+                  <option value="教材">教材</option>
+                  <option value="コース名">コース名</option>
+                  <option value="状態">状態</option>
+                </select>
+              </label>
+              <label>
+                並び順
+                <select
+                  value={reminderSortAsc ? "asc" : "desc"}
+                  onChange={(e) => setReminderSortAsc(e.target.value === "asc")}
+                >
+                  <option value="asc">昇順</option>
+                  <option value="desc">降順</option>
+                </select>
+              </label>
+            </div>
+            {!!reminderStatusOptions.length && (
+              <div className="reminder-statuses">
+                <div className="reminder-status-header">
+                  <span>含める状態</span>
+                  <div className="reminder-status-actions">
+                    <button type="button" onClick={selectAllReminderStatuses}>
+                      全て選択
+                    </button>
+                    <button type="button" onClick={applyDefaultReminderStatuses}>
+                      完了系を除外
+                    </button>
+                  </div>
+                </div>
+                <div className="reminder-status-list">
+                  {reminderStatusOptions.map((status) => (
+                    <label key={status || "__empty"}>
+                      <input
+                        type="checkbox"
+                        checked={reminderStatuses.includes(status)}
+                        onChange={() => toggleReminderStatus(status)}
+                      />
+                      <span>{status || "（状態なし）"}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="reminder-preview-list">
+              {reminderPreview.length ? (
+                reminderPreview.map((item, index) => (
+                  <div key={`${item.教材}-${item.締切.toISO()}-${index}`} className="reminder-preview-item">
+                    <span className="reminder-preview-title">{item.教材}</span>
+                    <div className="reminder-preview-meta">
+                      <span>{item.締切.toFormat("yyyy-MM-dd HH:mm")}</span>
+                      <span>{item.コース名}</span>
+                      <span>{item.状態 || "（状態なし）"}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="reminder-preview-empty">対象の課題がありません。</p>
+              )}
+            </div>
+            <div className="reminder-actions">
+              <button onClick={handleReminderConfirm} className="primary">
+                ショートカットを起動
+              </button>
+              <button onClick={closeReminderModal}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
       {preview && (
         <div className="modal-overlay" onClick={closePreview}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
