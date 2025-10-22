@@ -9,18 +9,129 @@
   <link rel="stylesheet" href="./src/index.css" />
 </head>
 <body>
-  <header style="padding: 1rem; text-align: center;">
+  <header style="padding: 1.5rem 1rem; text-align: center;">
     <h1>📋 WebClass To-Do の使い方</h1>
+    <p style="margin-top: 0.5rem; color: var(--text-muted, #555);">
+      ダウンロードした課題一覧 CSV を読み込み、締切順のタスク管理を手早く行うためのツールです。
+    </p>
   </header>
-  <main style="max-width: 800px; margin: auto; padding: 1rem; line-height: 1.6;">
-    <ol>
-      <li>WebClass から「課題実施状況一覧」を CSV 形式でダウンロードします。</li>
-      <li>トップページでその CSV ファイルを選択します。</li>
-      <li>必要に応じて期間やキーワードなどの条件を設定します。</li>
-      <li>表示された一覧を各種フォーマットでエクスポートできます。</li>
-    </ol>
-    <p>ブラウザだけで動作するので、インストールは不要です。</p>
-    <p><a href="index.html">トップへ戻る</a></p>
+  <main
+    style="max-width: 840px; margin: auto; padding: 1rem 1.5rem 3rem; line-height: 1.8;"
+  >
+    <section>
+      <h2>準備</h2>
+      <ol>
+        <li>WebClass にログインし、「課題実施状況一覧」を CSV 形式でダウンロードします。</li>
+        <li>
+          <a href="index.html">WebClass To-Do のトップページ</a>を開き、
+          「課題実施状況一覧のCSVを選択してください。」の下にあるファイル選択ボタンから CSV を読み込みます。
+        </li>
+        <li>読み込み後は抽出条件や並び替えをお好みで調整できます。ブラウザだけで動作するためインストールは不要です。</li>
+      </ol>
+      <p>
+        ファイルを再度選び直したい場合は、ヘッダーのタイトルをクリックするか「🚪 ファイル選択解除」ボタンを押してください。
+      </p>
+    </section>
+
+    <section>
+      <h2>抽出条件と並び替え</h2>
+      <ul>
+        <li>「期間を指定（日）」で開始日から何日分を表示するかを設定できます。開始日・終了日は個別に変更可能です。</li>
+        <li>状態は複数選択できます。未提出だけ確認したいときなどに活用してください。</li>
+        <li>キーワード欄には教材名・コース名の一部を入力すると一致する行だけに絞り込めます。</li>
+        <li>テーブルの列見出しをクリックすると、締切・教材・コース名・状態で昇順／降順を切り替えながら並び替えできます。</li>
+        <li>条件をまとめて元に戻したい場合は「条件リセット」ボタンまたはショートカット（<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>）をご利用ください。</li>
+      </ul>
+      <p>設定した抽出条件はブラウザの履歴／セッションに保存されるため、ページを閉じたり戻ったりしても直前の状態から再開できます。</p>
+    </section>
+
+    <section>
+      <h2>書き出し・共有機能</h2>
+      <p>抽出結果の下にある各ボタンから、次の形式で書き出せます。</p>
+      <ul>
+        <li><strong>CSV ダウンロード</strong>：絞り込んだ課題のみを CSV として保存します。</li>
+        <li><strong>iCalendar (.ics)</strong>：カレンダーアプリに取り込める ics ファイルを生成します。</li>
+        <li><strong>Todoist CSV</strong>：Todoist のインポート形式に合わせた CSV を作成します。</li>
+        <li><strong>PNG（テーブル／縦リスト）</strong>：現在の表示を画像として保存します。テーブルはそのまま、縦リストはモバイル表示風のカードに変換されます。</li>
+        <li><strong>📲 リマインダーに追加</strong>：iPhone / iPad の Safari から利用すると、専用ショートカットを介して Apple のリマインダーへ送信できます（ステータスが「合格」「回答済み」の課題は除外されます）。</li>
+      </ul>
+      <p>
+        書き出し時には内容のプレビューが表示され、「ダウンロード」ボタンを押すと保存されます。
+        プレビューを閉じるときは右上の「閉じる」ボタンか <kbd>Esc</kbd> キーを押してください。
+      </p>
+    </section>
+
+    <section>
+      <h2>ショートカットキー</h2>
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="border-bottom: 1px solid var(--border, #ccc); text-align: left; padding: 0.5rem;">操作</th>
+            <th style="border-bottom: 1px solid var(--border, #ccc); text-align: left; padding: 0.5rem;">キー</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">CSV を選択</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>O</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">CSV エクスポート</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>C</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">iCalendar (.ics) エクスポート</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>I</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">Todoist CSV エクスポート</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">PNG（テーブル）エクスポート</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">PNG（縦リスト）エクスポート</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">抽出条件をリセット</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">使い方ページを開く</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>H</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);">プレビューでダウンロード</td>
+            <td style="padding: 0.5rem; border-bottom: 1px solid var(--border, #eee);"><kbd>Enter</kbd></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem;">プレビューを閉じる</td>
+            <td style="padding: 0.5rem;"><kbd>Esc</kbd></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>よくある質問</h2>
+      <dl>
+        <dt>Q. 読み込んだデータが消えてしまいました。</dt>
+        <dd>
+          A. ブラウザのセッションに保存していますが、別の CSV を読み込んだり、シークレットモードを終了するとリセットされます。必要に応じて書き出し機能をご利用ください。
+        </dd>
+        <dt>Q. リマインダー追加ボタンが動作しません。</dt>
+        <dd>
+          A. iPhone / iPad の Safari で、事前に案内されるショートカット（<a href="https://www.icloud.com/shortcuts/fdadcf1171ad4a8a82f7b2d6f494a57f" target="_blank" rel="noopener">WebClass Reminders</a>）をインストールしてから再度お試しください。
+        </dd>
+      </dl>
+    </section>
+
+    <p style="margin-top: 2rem; text-align: center;">
+      <a href="index.html" class="button">トップへ戻る</a>
+    </p>
   </main>
 </body>
 </html>
