@@ -328,6 +328,69 @@ select {
   }
 }
 
+.button-group .reminder-split {
+  display: inline-flex;
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease;
+}
+
+.button-group .reminder-split:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.reminder-split button {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.reminder-split .primary {
+  border-radius: 0;
+  border-right: none;
+}
+
+.reminder-split .split-toggle {
+  border: 1px solid var(--border);
+  border-left: none;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reminder-split.is-open .split-toggle,
+.reminder-split .split-toggle:hover {
+  background: var(--surface-hover);
+}
+
+.reminder-split-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 0.5rem;
+  min-width: 14rem;
+  z-index: 20;
+}
+
+.reminder-split-menu .menu-item {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+@media (max-width: 767px) {
+  .button-group .reminder-split {
+    width: 100%;
+  }
+}
+
 button,
 .button {
   padding: 0.65rem 1.2rem;
