@@ -159,9 +159,11 @@ export default function App() {
   // テーブルの参照（PNG 書き出し用）
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+  const [isReminderMenuOpen, setIsReminderMenuOpen] = useState(false);
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
+  const reminderMenuRef = useRef(null);
 
   // フィルタ条件のみリセット
   const resetFilters = () => {
@@ -184,6 +186,35 @@ export default function App() {
   }, [startDate, daysFilter]);
 
   const prevStateRef = useRef(null);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+
+    const handlePointerDown = (event) => {
+      if (
+        reminderMenuRef.current &&
+        !reminderMenuRef.current.contains(event.target)
+      ) {
+        setIsReminderMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsReminderMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isReminderMenuOpen]);
 
   // マウント時に履歴・sessionStorage から状態を復元
   useEffect(() => {
@@ -541,6 +572,11 @@ export default function App() {
     return true;
   }, []);
 
+  const handleShortcutDownload = useCallback(() => {
+    window.open(REMINDER_INSTALL_URL, "_blank", "noopener");
+    setIsReminderMenuOpen(false);
+  }, []);
+
   const handleReminderButtonClick = () => {
     const exclusions = new Set(
       REMINDER_EXCLUDED_STATUSES.map((status) => status.trim()),
@@ -550,6 +586,7 @@ export default function App() {
       return !exclusions.has(status);
     });
     runReminderShortcut(items);
+    setIsReminderMenuOpen(false);
   };
 
   const exportCSV = () => {
@@ -879,9 +916,40 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
-                <button onClick={handleReminderButtonClick} className="primary">
-                  📲 リマインダーに追加
-                </button>
+                <div
+                  className={`split-button${
+                    isReminderMenuOpen ? " open" : ""
+                  }`}
+                  ref={reminderMenuRef}
+                >
+                  <button
+                    type="button"
+                    onClick={handleReminderButtonClick}
+                    className="primary split-button-main"
+                  >
+                    📲 リマインダーに追加
+                  </button>
+                  <button
+                    type="button"
+                    className="primary split-button-toggle"
+                    aria-haspopup="true"
+                    aria-expanded={isReminderMenuOpen}
+                    aria-label="リマインダーのオプションを表示"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setIsReminderMenuOpen((prev) => !prev);
+                    }}
+                  >
+                    <span aria-hidden="true">▾</span>
+                  </button>
+                  {isReminderMenuOpen && (
+                    <div className="split-button-menu">
+                      <button type="button" onClick={handleShortcutDownload}>
+                        ショートカットDL
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="list-container">
                 {Object.entries(
