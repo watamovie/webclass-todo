@@ -162,6 +162,7 @@ export default function App() {
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
+  const reminderMenuRef = useRef(null);
 
   // フィルタ条件のみリセット
   const resetFilters = () => {
@@ -184,6 +185,7 @@ export default function App() {
   }, [startDate, daysFilter]);
 
   const prevStateRef = useRef(null);
+  const [isReminderMenuOpen, setReminderMenuOpen] = useState(false);
 
   // マウント時に履歴・sessionStorage から状態を復元
   useEffect(() => {
@@ -549,8 +551,47 @@ export default function App() {
       const status = (item.状態 || "").trim();
       return !exclusions.has(status);
     });
+    setReminderMenuOpen(false);
     runReminderShortcut(items);
   };
+
+  const toggleReminderMenu = () => {
+    setReminderMenuOpen((prev) => !prev);
+  };
+
+  const openReminderShortcutDownload = useCallback(() => {
+    window.open(REMINDER_INSTALL_URL, "_blank", "noopener,noreferrer");
+    setReminderMenuOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (
+        reminderMenuRef.current &&
+        !reminderMenuRef.current.contains(event.target)
+      ) {
+        setReminderMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setReminderMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isReminderMenuOpen]);
 
   const exportCSV = () => {
     try {
@@ -879,9 +920,42 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
-                <button onClick={handleReminderButtonClick} className="primary">
-                  📲 リマインダーに追加
-                </button>
+                <div
+                  className={`reminder-split${
+                    isReminderMenuOpen ? " is-open" : ""
+                  }`}
+                  ref={reminderMenuRef}
+                >
+                  <button
+                    onClick={handleReminderButtonClick}
+                    className="primary"
+                    type="button"
+                  >
+                    📲 リマインダーに追加
+                  </button>
+                  <button
+                    type="button"
+                    className="split-toggle"
+                    onClick={toggleReminderMenu}
+                    aria-haspopup="menu"
+                    aria-expanded={isReminderMenuOpen}
+                    aria-label="ショートカットダウンロードの切り替え"
+                  >
+                    <span aria-hidden="true">▾</span>
+                  </button>
+                  {isReminderMenuOpen && (
+                    <div className="reminder-split-menu" role="menu">
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={openReminderShortcutDownload}
+                        role="menuitem"
+                      >
+                        ショートカットをダウンロード
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="list-container">
                 {Object.entries(
