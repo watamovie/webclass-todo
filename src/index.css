@@ -316,6 +316,75 @@ select {
   justify-content: center;
 }
 
+.button-group .split-button {
+  display: inline-flex;
+  position: relative;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.split-button button {
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+
+.split-button-main {
+  border-top-left-radius: var(--radius);
+  border-bottom-left-radius: var(--radius);
+  padding-inline: 1.2rem;
+}
+
+.split-button-toggle {
+  border-top-right-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  padding-inline: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.split-button.open .split-button-toggle span {
+  transform: rotate(180deg);
+}
+
+.split-button-toggle span {
+  transition: transform 0.2s ease;
+}
+
+.split-button button + button {
+  margin-left: -1px;
+}
+
+.split-button-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  padding: 0.35rem;
+  z-index: 20;
+}
+
+.split-button-menu button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: calc(var(--radius) - 0.25rem);
+}
+
+.split-button-menu button:hover,
+.split-button-menu button:focus-visible {
+  background: var(--surface-hover);
+}
+
 @media (max-width: 767px) {
   .button-group {
     display: grid;
@@ -325,6 +394,13 @@ select {
   .button-group .button {
     width: 100%;
     font-size: 1rem;
+  }
+  .button-group .split-button {
+    width: 100%;
+  }
+  .split-button-main {
+    flex: 1;
+    text-align: center;
   }
 }
 
