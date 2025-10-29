@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useId } from "react";
 import Papa from "papaparse";
 import { DateTime } from "luxon";
 import { v4 as uuidv4 } from "uuid";
@@ -160,10 +160,12 @@ export default function App() {
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
   const [isReminderMenuOpen, setReminderMenuOpen] = useState(false);
+  const [isActionPanelOpen, setActionPanelOpen] = useState(false);
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
   const reminderMenuRef = useRef(null);
+  const extraActionsId = useId();
 
   // フィルタ条件のみリセット
   const resetFilters = () => {
@@ -900,51 +902,70 @@ export default function App() {
                 </table>
               </div>
               <div className="button-group">
-                <button onClick={exportCSV}>CSV ダウンロード</button>
-                <button onClick={exportICS}>
-                  iCalendar (.ics) ダウンロード
-                </button>
-                <button onClick={exportTodoist}>
-                  Todoist CSV ダウンロード
-                </button>
-                <button onClick={() => exportPNGTable(false)}>
-                  PNG（テーブル）
-                </button>
-                <button onClick={exportPNGList}>PNG（縦リスト）</button>
-                <div className="split-button" ref={reminderMenuRef}>
+                <div className="button-group__primary-row">
+                  <div className="split-button" ref={reminderMenuRef}>
+                    <button
+                      type="button"
+                      onClick={handleReminderButtonClick}
+                      className="primary split-main"
+                    >
+                      📲 リマインダーに追加
+                    </button>
+                    <button
+                      type="button"
+                      className="split-toggle primary"
+                      aria-expanded={isReminderMenuOpen}
+                      aria-haspopup="menu"
+                      onClick={() => setReminderMenuOpen((prev) => !prev)}
+                    >
+                      <span className="visually-hidden">
+                        ショートカットメニューを開閉
+                      </span>
+                      ▾
+                    </button>
+                    {isReminderMenuOpen && (
+                      <div className="split-dropdown" role="menu">
+                        <a
+                          href={REMINDER_INSTALL_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="button"
+                          role="menuitem"
+                          onClick={() => setReminderMenuOpen(false)}
+                        >
+                          ショートカットをダウンロード
+                        </a>
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={handleReminderButtonClick}
-                    className="primary split-main"
+                    className="button-group__toggle"
+                    aria-expanded={isActionPanelOpen}
+                    aria-controls={extraActionsId}
+                    onClick={() => setActionPanelOpen((prev) => !prev)}
                   >
-                    📲 リマインダーに追加
+                    {isActionPanelOpen ? "その他の操作を隠す ▲" : "その他の操作を表示 ▾"}
                   </button>
-                  <button
-                    type="button"
-                    className="split-toggle primary"
-                    aria-expanded={isReminderMenuOpen}
-                    aria-haspopup="menu"
-                    onClick={() => setReminderMenuOpen((prev) => !prev)}
-                  >
-                    <span className="visually-hidden">
-                      ショートカットメニューを開閉
-                    </span>
-                    ▾
+                </div>
+                <div
+                  id={extraActionsId}
+                  className={`button-group__extras ${
+                    isActionPanelOpen ? "is-open" : ""
+                  }`}
+                  aria-hidden={!isActionPanelOpen}
+                >
+                  <button onClick={exportCSV}>CSV ダウンロード</button>
+                  <button onClick={exportICS}>
+                    iCalendar (.ics) ダウンロード
                   </button>
-                  {isReminderMenuOpen && (
-                    <div className="split-dropdown" role="menu">
-                      <a
-                        href={REMINDER_INSTALL_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="button"
-                        role="menuitem"
-                        onClick={() => setReminderMenuOpen(false)}
-                      >
-                        ショートカットをダウンロード
-                      </a>
-                    </div>
-                  )}
+                  <button onClick={exportTodoist}>
+                    Todoist CSV ダウンロード
+                  </button>
+                  <button onClick={() => exportPNGTable(false)}>
+                    PNG（テーブル）
+                  </button>
+                  <button onClick={exportPNGList}>PNG（縦リスト）</button>
                 </div>
               </div>
               <div className="list-container">
