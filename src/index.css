@@ -322,10 +322,34 @@ select {
 /* ---------------- Button group ---------------- */
 .button-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
   margin-bottom: var(--gap);
+}
+
+.button-group__primary-row {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.button-group__toggle {
+  padding-inline: 1.2rem;
+}
+
+.button-group__extras {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.button-group__extras.is-open {
+  display: flex;
 }
 
 .button-group .split-button {
@@ -333,17 +357,28 @@ select {
 }
 
 @media (max-width: 767px) {
-  .button-group {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  .button-group__primary-row {
+    flex-direction: column;
   }
-  .button-group button,
-  .button-group .button {
+
+  .button-group__toggle {
     width: 100%;
     font-size: 1rem;
   }
+
+  .button-group__extras.is-open {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .button-group__extras.is-open button,
+  .button-group__extras.is-open .button {
+    width: 100%;
+    font-size: 1rem;
+  }
+
   .button-group .split-button {
-    grid-column: 1 / -1;
     width: 100%;
   }
 }
