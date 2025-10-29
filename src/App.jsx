@@ -159,9 +159,11 @@ export default function App() {
   // テーブルの参照（PNG 書き出し用）
   const tableRef = useRef(null);
   const [preview, setPreview] = useState(null); // {url, name, mime, blob}
+  const [isReminderMenuOpen, setReminderMenuOpen] = useState(false);
 
   // refs for latest handlers (used by hotkeys)
   const handlersRef = useRef({});
+  const reminderMenuRef = useRef(null);
 
   // フィルタ条件のみリセット
   const resetFilters = () => {
@@ -184,6 +186,35 @@ export default function App() {
   }, [startDate, daysFilter]);
 
   const prevStateRef = useRef(null);
+
+  useEffect(() => {
+    if (!isReminderMenuOpen) return;
+
+    const handleClickOutside = (event) => {
+      if (
+        reminderMenuRef.current &&
+        !reminderMenuRef.current.contains(event.target)
+      ) {
+        setReminderMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setReminderMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isReminderMenuOpen]);
 
   // マウント時に履歴・sessionStorage から状態を復元
   useEffect(() => {
@@ -542,6 +573,7 @@ export default function App() {
   }, []);
 
   const handleReminderButtonClick = () => {
+    setReminderMenuOpen(false);
     const exclusions = new Set(
       REMINDER_EXCLUDED_STATUSES.map((status) => status.trim()),
     );
@@ -879,9 +911,41 @@ export default function App() {
                   PNG（テーブル）
                 </button>
                 <button onClick={exportPNGList}>PNG（縦リスト）</button>
-                <button onClick={handleReminderButtonClick} className="primary">
-                  📲 リマインダーに追加
-                </button>
+                <div className="split-button" ref={reminderMenuRef}>
+                  <button
+                    type="button"
+                    onClick={handleReminderButtonClick}
+                    className="primary split-main"
+                  >
+                    📲 リマインダーに追加
+                  </button>
+                  <button
+                    type="button"
+                    className="split-toggle primary"
+                    aria-expanded={isReminderMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setReminderMenuOpen((prev) => !prev)}
+                  >
+                    <span className="visually-hidden">
+                      ショートカットメニューを開閉
+                    </span>
+                    ▾
+                  </button>
+                  {isReminderMenuOpen && (
+                    <div className="split-dropdown" role="menu">
+                      <a
+                        href={REMINDER_INSTALL_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="button"
+                        role="menuitem"
+                        onClick={() => setReminderMenuOpen(false)}
+                      >
+                        ショートカットをダウンロード
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="list-container">
                 {Object.entries(
