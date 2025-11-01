@@ -108,6 +108,8 @@ const buildImageWrapper = (isMobile, filtered, tableRef) => {
     if (!container) return null;
     const tableEl = container.querySelector("table");
     if (!tableEl) return null;
+    wrapper.className = container.className || "";
+    wrapper.style.cssText = container.getAttribute("style") || "";
     wrapper.appendChild(tableEl.cloneNode(true));
   }
   return wrapper;
