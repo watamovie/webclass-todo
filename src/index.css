@@ -1,80 +1,39 @@
 /* -----------------------------------------------------------------
- * WebClass To-Do – Neo-Modern UI (2025-07-19 Rev.B)
- * 機能は一切変更せず、見た目と操作性だけを強化しました。
- *  - ダーク／ライト両対応
- *  - モバイルファースト + CSS Grid で崩れにくいレイアウト
- *  - アクセシビリティ向上 (フォーカスリング / タッチターゲット)
- *  - 微細なアニメーションで “サクサク感”
+ * WebClass To-Do – iOS-Like UI
  * ----------------------------------------------------------------- */
 
-/* ---------------- Root palette & typography ---------------- */
 :root {
-  /* Light theme */
-  --bg: #f9fafb;
+  /* Colors - Light Theme (iOS-like) */
+  --bg: #f2f2f7; /* iOS System Grouped Background */
   --surface: #ffffff;
-  --surface-hover: #f1f5f9;
-  --border: #e5e7eb;
-  --text: #1f2937;
-  --text-secondary: #1f2937;
-  --primary: #3b82f6;
-  --primary-dim: #2563eb;
-  --radius: 0.75rem;
+  --surface-hover: #f2f2f7;
+  --border: #c6c6c8; /* iOS Separator Color */
+  --text: #000000;
+  --text-secondary: #8e8e93; /* iOS System Gray */
+  --primary: #007aff; /* iOS System Blue */
+  --primary-dim: #0063cf;
+  --radius: 12px;
   --gap: 1.25rem;
-  --sidebar-width: 260px;
-  --font: "Noto Sans JP", "Helvetica Neue", Arial, sans-serif;
+  --sidebar-width: 300px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* Elevation */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121212;
-    --surface: #1a1a1a;
-    --surface-hover: #2a2a2a;
-    --border: #333333;
-    --text: #e0e0e0;
-    --text-secondary: #9e9e9e;
-    --primary: #3b82f6;
-    --primary-dim: #60a5fa;
+    --bg: #000000; /* iOS System Background (Black) or Grouped #1c1c1e */
+    --surface: #1c1c1e; /* iOS Secondary System Grouped Background */
+    --surface-hover: #2c2c2e;
+    --border: #38383a;
+    --text: #ffffff;
+    --text-secondary: #8e8e93;
+    --primary: #0a84ff; /* iOS Dark Mode Blue */
+    --primary-dim: #409cff;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
-  }
-  input[type="date"],
-  input[type="number"],
-  input[type="text"],
-  select {
-    background: #2a2a2a;
-    color: #ffffff;
-  }
-
-  button,
-  .button,
-  .number-spinner button {
-    background: #2d2d2d;
-    color: #ffffff;
-  }
-  button:hover,
-  .button:hover,
-  .number-spinner button:hover {
-    background: #3c3c3c;
-  }
-
-  input:focus-visible,
-  select:focus-visible,
-  button:focus-visible {
-    outline-color: #888888;
-  }
-
-  .table-container tr:hover {
-    background: #2a2a2a;
-  }
-
-  .list-item {
-    background: #1a1a1a;
-    border-color: #333333;
-    color: #e0e0e0;
   }
 }
 
@@ -95,16 +54,21 @@ body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
-/* Remove tap-highlight on mobile */
 button,
 input,
-select {
-  font: inherit;
+select,
+textarea {
+  font-family: inherit;
+  font-size: 1rem;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -130,7 +94,7 @@ a:hover {
 
 /* ---------------- Layout container ---------------- */
 .container {
-  display: block; /* mobile first */
+  display: block;
   width: 100%;
   max-width: 1280px;
   margin-inline: auto;
@@ -141,32 +105,21 @@ header {
   margin-bottom: var(--gap);
   display: flex;
   align-items: center;
+  justify-content: space-between; /* Space out title and button */
   gap: 0.75rem;
 }
 
 header h1 {
-  font-size: clamp(1.5rem, 2vw + 1rem, 2rem);
+  font-size: 1.7rem; /* iOS Large Title size approx */
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-}
-
-header img.logo {
-  width: 2.25rem;
-  height: 2.25rem;
-  flex-shrink: 0;
+  margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .sidebar {
   width: 100%;
   margin-bottom: var(--gap);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  background: transparent; /* No card background on mobile, just content */
 }
 
 @media (min-width: 768px) {
@@ -185,16 +138,21 @@ header img.logo {
   }
   .sidebar {
     position: sticky;
-    top: var(--gap);
-    height: calc(100vh - 2 * var(--gap) - 2.5rem);
-    display: flex;
-    flex-direction: column;
+    top: calc(var(--gap) + env(safe-area-inset-top));
+    height: auto;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
   }
 }
 
 /* ---------------- Sidebar accordion ---------------- */
 .filter-accordion {
-  padding: var(--gap);
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden; /* For radius */
+  box-shadow: var(--shadow-sm);
 }
 
 .filter-accordion summary {
@@ -204,6 +162,9 @@ header img.logo {
   outline: none;
   display: flex;
   align-items: center;
+  padding: 1rem;
+  background: var(--surface);
+  color: var(--primary);
 }
 
 .filter-accordion summary::marker,
@@ -216,305 +177,283 @@ header img.logo {
   margin-left: auto;
   transform: rotate(90deg);
   transition: transform 0.2s ease;
+  color: var(--text-secondary);
+  font-weight: 400;
 }
 
 details[open] > summary::after {
-  transform: rotate(180deg);
+  transform: rotate(-90deg);
+}
+
+details[open] > summary {
+  border-bottom: 1px solid var(--border);
 }
 
 .filter-fields {
-  margin-top: var(--gap);
+  padding: 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .filter-fields label {
-  font-size: 0.875rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
+  color: var(--text);
 }
 
+/* iOS Input Style */
 input[type="date"],
 input[type="number"],
+input[type="text"],
 select {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-hover);
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 10px;
+  background-color: var(--bg); /* Light gray on white surface */
+  color: var(--text);
+  font-size: 1rem;
+  width: 100%;
 }
 
-.number-spinner {
-  display: flex;
-  align-items: stretch;
-}
-
-.number-spinner button {
-  width: 2.25rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
+select {
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%238E8E93%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.65em auto;
+  padding-right: 2.5rem;
   cursor: pointer;
 }
 
-.number-spinner button:hover {
-  background: var(--surface-hover);
+/* Number spinner tweaks */
+.number-spinner {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 2px;
+}
+
+.number-spinner button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .number-spinner input {
-  width: 4rem;
+  background: transparent;
   text-align: center;
-  border: 1px solid var(--border);
-  border-inline: none;
-  background: var(--surface-hover);
+  border: none;
+  padding: 0;
+  flex: 1;
+  font-weight: 600;
 }
 
 .reset-btn {
   align-self: flex-start;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  box-shadow: none;
+}
+.reset-btn:hover {
+  background: transparent;
+  text-decoration: underline;
+  box-shadow: none;
 }
 
 /* ---------------- Metrics ---------------- */
 .metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1rem;
   font-weight: 600;
   margin-bottom: var(--gap);
-}
-
-.metrics .metric {
-  min-width: 6rem;
-}
-
-/* ---------------- Tabs ---------------- */
-.tabs {
-  display: flex;
-  gap: 1.5rem;
-  margin-bottom: var(--gap);
-  border-bottom: 1px solid var(--border);
-}
-
-.tabs button {
-  background: none;
-  border: none;
-  padding: 0.75rem 0;
-  font-weight: 500;
-  cursor: pointer;
-  position: relative;
-}
-
-.tabs button::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  width: 100%;
-  height: 2px;
-  background: transparent;
-  transition: background 0.2s ease;
-}
-
-.tabs button.active::after,
-.tabs button:hover::after {
-  background: var(--primary);
+  padding: 0 0.5rem;
 }
 
 /* ---------------- Button group ---------------- */
 .button-group {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   margin-bottom: var(--gap);
 }
 
 .button-group__primary-row {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: column;
   gap: 0.75rem;
   width: 100%;
 }
 
 .button-group__toggle {
-  padding-inline: 1.2rem;
+  background: transparent;
+  color: var(--primary);
+  border: none;
+  box-shadow: none;
+  font-size: 0.9rem;
+}
+.button-group__toggle:hover {
+  background: transparent;
+  box-shadow: none;
+  text-decoration: underline;
 }
 
 .button-group__extras {
   display: none;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.75rem;
-  justify-content: center;
-  width: 100%;
 }
 
 .button-group__extras.is-open {
   display: flex;
 }
 
-.button-group .split-button {
-  display: inline-flex;
-}
-
-@media (max-width: 767px) {
-  .button-group__primary-row {
-    flex-direction: column;
-  }
-
-  .button-group__toggle {
-    width: 100%;
-    font-size: 1rem;
-  }
-
-  .button-group__extras.is-open {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    width: 100%;
-  }
-
-  .button-group__extras.is-open button,
-  .button-group__extras.is-open .button {
-    width: 100%;
-    font-size: 1rem;
-  }
-
-  .button-group .split-button {
-    width: 100%;
-  }
-}
-
+/* iOS Button Style */
 button,
 .button {
-  padding: 0.65rem 1.2rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1rem;
+  border: none;
+  border-radius: 12px;
+  background: var(--surface); /* White button on gray bg */
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 1rem;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: opacity 0.2s;
 }
 
-button:hover,
-.button:hover {
-  background: var(--surface-hover);
-  box-shadow: var(--shadow-md);
+button:active,
+.button:active {
+  opacity: 0.6;
 }
 
 button.primary {
   background: var(--primary);
-  border-color: var(--primary);
   color: #fff;
 }
-
 button.primary:hover {
-  background: var(--primary-dim);
+  background: var(--primary); /* No hover change on iOS typically, just active state */
 }
 
+/* Split Button Mobile Fix */
 .split-button {
-  position: relative;
-  display: inline-flex;
-  align-items: stretch;
+  display: flex;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .split-button > button {
   border-radius: 0;
   margin: 0;
+  box-shadow: none;
 }
 
 .split-button .split-main {
-  border-top-left-radius: var(--radius);
-  border-bottom-left-radius: var(--radius);
+  flex: 1;
 }
 
 .split-button .split-toggle {
-  border-top-right-radius: var(--radius);
-  border-bottom-right-radius: var(--radius);
-  margin-left: -1px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-inline: 0.75rem;
-  min-width: 2.75rem;
-}
-
-.split-button .split-toggle.primary:hover {
-  background: var(--primary-dim);
+  width: 3rem;
+  border-left: 1px solid rgba(255,255,255,0.2);
 }
 
 .split-dropdown {
   position: absolute;
-  top: calc(100% + 0.5rem);
+  top: auto;
+  bottom: 100%; /* Show above if space is tight? Or manage with JS. Standard is below */
+  margin-top: 0.5rem;
   right: 0;
+  left: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
   box-shadow: var(--shadow-md);
   padding: 0.5rem;
-  min-width: 12rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
   z-index: 20;
 }
-
-.split-dropdown .button {
-  display: block;
-  width: 100%;
-  text-align: left;
+/* On desktop, keep relative */
+@media (min-width: 768px) {
+  .split-dropdown {
+    width: auto;
+    left: auto;
+    bottom: auto;
+    top: 100%;
+  }
+  .button-group__primary-row {
+    flex-direction: row;
+  }
+  .split-button {
+    width: auto;
+  }
 }
 
-/* ---------------- Table ---------------- */
+
+/* ---------------- Table (Desktop) ---------------- */
 .table-container {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  display: none;
+}
+@media (min-width: 768px) {
+  .table-container {
+    display: block;
+  }
 }
 
-/* ---------------- Mobile list ---------------- */
-.list-container {
-  display: none;
+.table-container table {
+  border-collapse: collapse;
   width: 100%;
 }
 
-.list-date {
+.table-container th,
+.table-container td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-container th {
+  background: var(--bg);
   font-weight: 600;
-  margin: 1rem 0 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.list-item {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+.table-container tr:last-child td {
+  border-bottom: none;
 }
 
-.list-title {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  word-break: break-word;
-}
-
-.list-meta {
-  font-size: 0.875rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-@media (max-width: 767px) {
-  .table-container {
-    display: none;
-  }
-  .list-container {
-    display: block;
-  }
+/* ---------------- List (Mobile) ---------------- */
+.list-container {
+  display: block;
+  width: 100%;
 }
 
 @media (min-width: 768px) {
@@ -523,167 +462,126 @@ button.primary:hover {
   }
 }
 
-.table-container table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: 640px;
+.list-day {
+  margin-bottom: 2rem;
 }
 
-.table-container th,
-.table-container td {
-  padding: 0.65rem 0.9rem;
-  white-space: nowrap;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
-}
-
-.table-container th {
-  background: var(--surface-hover);
-  text-align: left;
+.list-date {
+  padding-left: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   font-weight: 600;
 }
 
-.table-container th.sortable {
-  cursor: pointer;
-}
-.table-container th.sortable .arrow {
-  margin-left: 0.25rem;
-  font-size: 0.75rem;
-}
-
-.table-container tr:hover {
-  background: var(--surface-hover);
+/* Inset Grouped List Item Style */
+.list-item {
+  background: var(--surface);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-/* Zebra stripes */
-.table-container tr:nth-child(even) {
-  background: color-mix(in srgb, var(--surface-hover) 30%, transparent);
+/* Grouping logic for items following the date */
+.list-date + .list-item {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
 }
 
-/* Sticky header for long tables */
-.table-container thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+/* Logic for dividers and radius is tricky with flat structure,
+   but let's try assuming they are contiguous in DOM */
+.list-item:not(:last-child) {
+  position: relative;
+}
+.list-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 1rem; /* Indented separator */
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  transform: scaleY(0.5); /* Hairline */
 }
 
-/* Hide scrollbars on WebKit */
-.table-container::-webkit-scrollbar {
-  height: 0.6rem;
+/* We need to target the LAST item in the group to round bottom corners.
+   Since the structure is <div class="list-day"> <h3></h3> <div item> <div item> </div>,
+   we can use :last-child on the item itself relative to list-day container.
+*/
+.list-day > .list-item:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
-.table-container::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--primary) 50%, transparent);
-  border-radius: 9999px;
+.list-day > .list-item:last-child::after {
+  display: none;
 }
 
-/* ---------------- File Uploader (no-data state) ---------------- */
+.list-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.list-meta {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.list-meta span:not(:last-child)::after {
+  content: "•";
+  margin-left: 0.5rem;
+  opacity: 0.5;
+}
+
+/* ---------------- File Uploader ---------------- */
 .container > input[type="file"] {
   display: block;
-  margin: 4rem auto 0 auto;
+  margin: 2rem auto;
   width: 100%;
-  max-width: 520px;
-  padding: 3rem 1.5rem;
+  padding: 2rem 1rem;
   border: 2px dashed var(--border);
   border-radius: var(--radius);
-  background: var(--surface-hover);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.container > input[type="file"]:hover {
   background: var(--surface);
-  border-color: var(--primary);
-}
-
-/* Style of the inner "Choose File" button (modern browsers) */
-.container > input[type="file"]::file-selector-button {
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.container > input[type="file"]::file-selector-button:hover {
-  background: var(--primary-dim);
-}
-
-/* Message under the uploader */
-.container > p {
-  text-align: center;
-  margin-top: 1.25rem;
-  font-size: 0.95rem;
   color: var(--text-secondary);
 }
 
-/* Improve focus ring for accessibility */
-input[type="file"]:focus-visible,
-button:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--primary) 60%, transparent);
-  outline-offset: 2px;
-}
-/* Chrome, Safari, Edge 対応: スピンボタン非表示 */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* Firefox 対応 */
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* ---------------- Preview Modal ---------------- */
+/* ---------------- Modal ---------------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1rem;
 }
 .modal {
   background: var(--surface);
-  color: var(--text);
-  padding: 1rem;
-  border-radius: var(--radius);
-  max-width: 90vw;
+  border-radius: 16px;
+  padding: 1.5rem;
+  max-width: 100%;
   max-height: 90vh;
   overflow: auto;
   box-shadow: var(--shadow-md);
-}
-
-.csv-preview {
-  overflow: auto;
-  max-width: 80vw;
-  max-height: 60vh;
-}
-
-.csv-preview table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.csv-preview th,
-.csv-preview td {
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border);
-  font-size: 0.875rem;
-  white-space: nowrap;
-}
-
-.csv-preview th {
-  background: var(--surface-hover);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .modal img {
-  max-width: 80vw;
-  max-height: 80vh;
-  object-fit: contain;
+  border-radius: 8px;
+}
+
+.modal .button {
+  width: 100%;
 }
