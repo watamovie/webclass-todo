@@ -34,6 +34,26 @@
     </section>
 
     <section>
+      <h2>ショートカットによる自動取り込み（上級者向け）</h2>
+      <p>iPhone ショートカットアプリを活用することで、CSV ファイルを選択する手間を省き、一発でデータを表示することができます。</p>
+      <h3>仕組み</h3>
+      <p>ショートカット側で CSV のテキストデータを取得し、それを Base64 エンコードして URL パラメータとして Web アプリに渡します。</p>
+      <h3>ショートカットの作成手順</h3>
+      <ol>
+        <li>ショートカット アプリで新しいショートカットを作成します。</li>
+        <li>CSV のテキストを取得するアクションを追加します（例：「クリップボードを取得」や WebClass からの取得ロジックなど）。</li>
+        <li><strong>「Base64エンコード」</strong>アクションを追加し、取得したテキストをエンコードします（改行オプションは「なし」推奨）。</li>
+        <li><strong>「URLエンコード」</strong>アクションを追加し、Base64 エンコードされたテキストを URL エンコードします。</li>
+        <li><strong>「URL」</strong>アクションを追加し、以下のように設定します。<br>
+          <code>https://webclass-todo.pages.dev/?data=</code> の後ろに、URL エンコードされた変数を追加。<br>
+          例: <code>https://webclass-todo.pages.dev/?data=</code><span style="border: 1px solid #ccc; border-radius: 4px; padding: 0 4px; font-size: 0.9em;">URLエンコード済みのテキスト</span>
+        </li>
+        <li><strong>「URLを開く」</strong>アクションを追加します。</li>
+      </ol>
+      <p>このショートカットを実行すると、WebClass To-Do が開き、CSV データが自動的に読み込まれます。</p>
+    </section>
+
+    <section>
       <h2>抽出条件と並び替え</h2>
       <ul>
         <li>「期間を指定（日）」で開始日から何日分を表示するかを設定できます。開始日・終了日は個別に変更可能です。</li>
