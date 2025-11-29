@@ -218,8 +218,89 @@ export default function App() {
     };
   }, [isReminderMenuOpen]);
 
-  // マウント時に履歴・sessionStorage から状態を復元
+  // 共通のCSV解析ロジック
+  const parseCSVAndLoad = useCallback((text) => {
+    const lines = text.split(/\r?\n/);
+    const idx = lines.findIndex((l) =>
+      l.startsWith('"学部","学科","コース名","教材","締切"'),
+    );
+    if (idx < 0) {
+      alert("ヘッダー行が見つかりません。WebClassの「課題実施状況一覧」CSVか確認してください。");
+      return;
+    }
+    const csvText = lines.slice(idx).join("\n");
+    Papa.parse(csvText, {
+      header: true,
+      skipEmptyLines: true,
+      complete: ({ data: rows, meta }) => {
+        const map = {
+          締切: ["締切", "締切日", "期限"],
+          教材: ["教材", "課題", "タイトル"],
+          コース名: ["コース名", "科目名", "講義名"],
+          状態: ["状態", "ステータス", "提出状況"],
+        };
+        const fieldMap = {};
+        Object.entries(map).forEach(([key, aliases]) => {
+          const found = meta.fields.find((f) => aliases.includes(f));
+          if (found) fieldMap[key] = found;
+        });
+        const missing = Object.keys(map).filter((k) => !fieldMap[k]);
+        if (missing.length) {
+          alert(`列が見つかりません: ${missing.join(", ")}`);
+          return;
+        }
+        const parsed = rows.map((r) => {
+          let dt = DateTime.fromISO(r[fieldMap["締切"]], {
+            zone: "Asia/Tokyo",
+          });
+          if (!dt.isValid)
+            dt = DateTime.fromFormat(
+              r[fieldMap["締切"]],
+              "yyyy-MM-dd HH:mm",
+              { zone: "Asia/Tokyo" },
+            );
+          return {
+            締切: dt,
+            教材: r[fieldMap["教材"]] || "",
+            コース名: r[fieldMap["コース名"]] || "",
+            状態: r[fieldMap["状態"]] || "",
+          };
+        });
+        setData(parsed);
+      },
+    });
+  }, []);
+
+  // マウント時に URL Hash (csv=...) をチェック、または履歴・sessionStorage から状態を復元
   useEffect(() => {
+    // 1. Check Hash
+    const hash = window.location.hash;
+    if (hash && (hash.includes("csv=") || hash.includes("import="))) {
+      try {
+        const params = new URLSearchParams(hash.substring(1)); // remove #
+        const csvBase64 = params.get("csv") || params.get("import");
+        if (csvBase64) {
+          // Base64 decode (UTF-8 safe)
+          const binaryString = atob(csvBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const csvText = new TextDecoder().decode(bytes);
+
+          parseCSVAndLoad(csvText);
+
+          // Clear hash
+          window.history.replaceState(null, "", " ");
+          return; // Skip restore from storage if hash import succeeded
+        }
+      } catch (e) {
+        console.error("Import failed:", e);
+        alert("URLからのインポートに失敗しました: " + e.message);
+      }
+    }
+
+    // 2. Restore from storage
     const applyState = (state) => {
       if (!state) return;
       try {
@@ -267,7 +348,7 @@ export default function App() {
       window.removeEventListener("pageshow", restore);
       window.removeEventListener("popstate", onPop);
     };
-  }, [preview]);
+  }, [parseCSVAndLoad, preview]);
 
   // Persist and push history
   useEffect(() => {
@@ -382,57 +463,24 @@ export default function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ({ target }) => {
-      const lines = target.result.split(/\r?\n/);
-      const idx = lines.findIndex((l) =>
-        l.startsWith('"学部","学科","コース名","教材","締切"'),
-      );
-      if (idx < 0) {
-        alert("ヘッダー行が見つかりません");
-        return;
-      }
-      const csvText = lines.slice(idx).join("\n");
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: ({ data: rows, meta }) => {
-          const map = {
-            締切: ["締切", "締切日", "期限"],
-            教材: ["教材", "課題", "タイトル"],
-            コース名: ["コース名", "科目名", "講義名"],
-            状態: ["状態", "ステータス", "提出状況"],
-          };
-          const fieldMap = {};
-          Object.entries(map).forEach(([key, aliases]) => {
-            const found = meta.fields.find((f) => aliases.includes(f));
-            if (found) fieldMap[key] = found;
-          });
-          const missing = Object.keys(map).filter((k) => !fieldMap[k]);
-          if (missing.length) {
-            alert(`列が見つかりません: ${missing.join(", ")}`);
-            return;
-          }
-          const parsed = rows.map((r) => {
-            let dt = DateTime.fromISO(r[fieldMap["締切"]], {
-              zone: "Asia/Tokyo",
-            });
-            if (!dt.isValid)
-              dt = DateTime.fromFormat(
-                r[fieldMap["締切"]],
-                "yyyy-MM-dd HH:mm",
-                { zone: "Asia/Tokyo" },
-              );
-            return {
-              締切: dt,
-              教材: r[fieldMap["教材"]] || "",
-              コース名: r[fieldMap["コース名"]] || "",
-              状態: r[fieldMap["状態"]] || "",
-            };
-          });
-          setData(parsed);
-        },
-      });
+      parseCSVAndLoad(target.result);
     };
     reader.readAsText(file, "utf-8");
+  };
+
+  // Clipboard parsing
+  const handleClipboardImport = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        alert("クリップボードが空です");
+        return;
+      }
+      parseCSVAndLoad(text);
+    } catch (e) {
+      console.error(e);
+      alert("クリップボードからの読み込みに失敗しました（権限を確認してください）");
+    }
   };
 
   // Filter
@@ -739,18 +787,25 @@ export default function App() {
         </header>
         {!data.length && (
           <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFile}
-            />
-            <p>課題実施状況一覧のCSVを選択してください。</p>
-            <p>
-              <a href="./usage.html" target="_blank" rel="noopener" className="button">
-                使い方を見る
-              </a>
-            </p>
+            <div className="upload-area">
+              <p>課題実施状況一覧のCSVを選択してください。</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFile}
+                style={{ marginBottom: '1rem' }}
+              />
+              <p>または</p>
+              <button onClick={handleClipboardImport} className="secondary" style={{ marginBottom: '1rem' }}>
+                📋 クリップボードから読み込む
+              </button>
+              <p>
+                <a href="./usage.html" target="_blank" rel="noopener" className="button">
+                  使い方を見る
+                </a>
+              </p>
+            </div>
           </>
         )}
         {data.length > 0 && (
