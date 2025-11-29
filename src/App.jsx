@@ -303,6 +303,24 @@ export default function App() {
     }
   }, [data, daysFilter, startDate, endDate, statuses, keyword, sortField, sortAsc]);
 
+  // Handle CSV from URL query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const csvParam = params.get("csv");
+    if (csvParam) {
+      try {
+        const decodedCsv = decodeURIComponent(csvParam);
+        processCSVData(decodedCsv);
+        // Optional: Clean URL
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState(null, "", newUrl);
+      } catch (e) {
+        console.error("Failed to parse CSV from URL", e);
+        alert("URLからのCSV読み込みに失敗しました");
+      }
+    }
+  }, []);
+
   // Keep latest handlers for hotkeys
   useEffect(() => {
     handlersRef.current = {
@@ -376,61 +394,67 @@ export default function App() {
     };
   }, []);
 
+  const processCSVData = (text) => {
+    const lines = text.split(/\r?\n/);
+    const idx = lines.findIndex((l) =>
+      l.startsWith('"学部","学科","コース名","教材","締切"'),
+    );
+    // If not found, try parsing as direct CSV or fallback to full text
+    const csvText = idx >= 0 ? lines.slice(idx).join("\n") : text;
+
+    Papa.parse(csvText, {
+      header: true,
+      skipEmptyLines: true,
+      complete: ({ data: rows, meta }) => {
+        const map = {
+          締切: ["締切", "締切日", "期限"],
+          教材: ["教材", "課題", "タイトル"],
+          コース名: ["コース名", "科目名", "講義名"],
+          状態: ["状態", "ステータス", "提出状況"],
+        };
+        const fieldMap = {};
+        Object.entries(map).forEach(([key, aliases]) => {
+          const found = meta.fields.find((f) => aliases.includes(f));
+          if (found) fieldMap[key] = found;
+        });
+        const missing = Object.keys(map).filter((k) => !fieldMap[k]);
+        if (missing.length) {
+          // If we didn't find the header row via slice, and now we are missing columns,
+          // it's likely a bad CSV or the user uploaded something unexpected.
+          // But if idx < 0 and we are missing fields, we should probably warn.
+          // However, to support flexible inputs from shortcuts, we might want to be lenient or provide specific error.
+          alert(`列が見つかりません: ${missing.join(", ")}`);
+          return;
+        }
+        const parsed = rows.map((r) => {
+          let dt = DateTime.fromISO(r[fieldMap["締切"]], {
+            zone: "Asia/Tokyo",
+          });
+          if (!dt.isValid)
+            dt = DateTime.fromFormat(
+              r[fieldMap["締切"]],
+              "yyyy-MM-dd HH:mm",
+              { zone: "Asia/Tokyo" },
+            );
+          return {
+            締切: dt,
+            教材: r[fieldMap["教材"]] || "",
+            コース名: r[fieldMap["コース名"]] || "",
+            状態: r[fieldMap["状態"]] || "",
+          };
+        });
+        setData(parsed);
+      },
+    });
+  };
+
   // File upload parsing
   const handleFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ({ target }) => {
-      const lines = target.result.split(/\r?\n/);
-      const idx = lines.findIndex((l) =>
-        l.startsWith('"学部","学科","コース名","教材","締切"'),
-      );
-      if (idx < 0) {
-        alert("ヘッダー行が見つかりません");
-        return;
-      }
-      const csvText = lines.slice(idx).join("\n");
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: ({ data: rows, meta }) => {
-          const map = {
-            締切: ["締切", "締切日", "期限"],
-            教材: ["教材", "課題", "タイトル"],
-            コース名: ["コース名", "科目名", "講義名"],
-            状態: ["状態", "ステータス", "提出状況"],
-          };
-          const fieldMap = {};
-          Object.entries(map).forEach(([key, aliases]) => {
-            const found = meta.fields.find((f) => aliases.includes(f));
-            if (found) fieldMap[key] = found;
-          });
-          const missing = Object.keys(map).filter((k) => !fieldMap[k]);
-          if (missing.length) {
-            alert(`列が見つかりません: ${missing.join(", ")}`);
-            return;
-          }
-          const parsed = rows.map((r) => {
-            let dt = DateTime.fromISO(r[fieldMap["締切"]], {
-              zone: "Asia/Tokyo",
-            });
-            if (!dt.isValid)
-              dt = DateTime.fromFormat(
-                r[fieldMap["締切"]],
-                "yyyy-MM-dd HH:mm",
-                { zone: "Asia/Tokyo" },
-              );
-            return {
-              締切: dt,
-              教材: r[fieldMap["教材"]] || "",
-              コース名: r[fieldMap["コース名"]] || "",
-              状態: r[fieldMap["状態"]] || "",
-            };
-          });
-          setData(parsed);
-        },
-      });
+        processCSVData(target.result);
     };
     reader.readAsText(file, "utf-8");
   };
