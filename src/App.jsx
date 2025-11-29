@@ -218,8 +218,71 @@ export default function App() {
     };
   }, [isReminderMenuOpen]);
 
+  // CSV テキストをパースして state にセットする共通関数
+  const processCSV = useCallback((csvText) => {
+    const lines = csvText.split(/\r?\n/);
+    const idx = lines.findIndex((l) =>
+      l.startsWith('"学部","学科","コース名","教材","締切"'),
+    );
+    if (idx < 0) {
+      alert("ヘッダー行が見つかりません");
+      return;
+    }
+    const validCsvText = lines.slice(idx).join("\n");
+    Papa.parse(validCsvText, {
+      header: true,
+      skipEmptyLines: true,
+      complete: ({ data: rows, meta }) => {
+        const map = {
+          締切: ["締切", "締切日", "期限"],
+          教材: ["教材", "課題", "タイトル"],
+          コース名: ["コース名", "科目名", "講義名"],
+          状態: ["状態", "ステータス", "提出状況"],
+        };
+        const fieldMap = {};
+        Object.entries(map).forEach(([key, aliases]) => {
+          const found = meta.fields.find((f) => aliases.includes(f));
+          if (found) fieldMap[key] = found;
+        });
+        const missing = Object.keys(map).filter((k) => !fieldMap[k]);
+        if (missing.length) {
+          alert(`列が見つかりません: ${missing.join(", ")}`);
+          return;
+        }
+        const parsed = rows.map((r) => {
+          let dt = DateTime.fromISO(r[fieldMap["締切"]], {
+            zone: "Asia/Tokyo",
+          });
+          if (!dt.isValid)
+            dt = DateTime.fromFormat(
+              r[fieldMap["締切"]],
+              "yyyy-MM-dd HH:mm",
+              { zone: "Asia/Tokyo" },
+            );
+          return {
+            締切: dt,
+            教材: r[fieldMap["教材"]] || "",
+            コース名: r[fieldMap["コース名"]] || "",
+            状態: r[fieldMap["状態"]] || "",
+          };
+        });
+        setData(parsed);
+      },
+    });
+  }, []);
+
   // マウント時に履歴・sessionStorage から状態を復元
   useEffect(() => {
+    // URL パラメータからのインポートを確認 (?csv=...)
+    const params = new URLSearchParams(window.location.search);
+    const csvParam = params.get("csv");
+    if (csvParam) {
+      processCSV(csvParam);
+      // URL をクリーンアップ (リロード時の再インポート防止)
+      window.history.replaceState(null, "", window.location.pathname);
+      return;
+    }
+
     const applyState = (state) => {
       if (!state) return;
       try {
@@ -267,7 +330,7 @@ export default function App() {
       window.removeEventListener("pageshow", restore);
       window.removeEventListener("popstate", onPop);
     };
-  }, [preview]);
+  }, [preview, processCSV]);
 
   // Persist and push history
   useEffect(() => {
@@ -382,55 +445,7 @@ export default function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ({ target }) => {
-      const lines = target.result.split(/\r?\n/);
-      const idx = lines.findIndex((l) =>
-        l.startsWith('"学部","学科","コース名","教材","締切"'),
-      );
-      if (idx < 0) {
-        alert("ヘッダー行が見つかりません");
-        return;
-      }
-      const csvText = lines.slice(idx).join("\n");
-      Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: true,
-        complete: ({ data: rows, meta }) => {
-          const map = {
-            締切: ["締切", "締切日", "期限"],
-            教材: ["教材", "課題", "タイトル"],
-            コース名: ["コース名", "科目名", "講義名"],
-            状態: ["状態", "ステータス", "提出状況"],
-          };
-          const fieldMap = {};
-          Object.entries(map).forEach(([key, aliases]) => {
-            const found = meta.fields.find((f) => aliases.includes(f));
-            if (found) fieldMap[key] = found;
-          });
-          const missing = Object.keys(map).filter((k) => !fieldMap[k]);
-          if (missing.length) {
-            alert(`列が見つかりません: ${missing.join(", ")}`);
-            return;
-          }
-          const parsed = rows.map((r) => {
-            let dt = DateTime.fromISO(r[fieldMap["締切"]], {
-              zone: "Asia/Tokyo",
-            });
-            if (!dt.isValid)
-              dt = DateTime.fromFormat(
-                r[fieldMap["締切"]],
-                "yyyy-MM-dd HH:mm",
-                { zone: "Asia/Tokyo" },
-              );
-            return {
-              締切: dt,
-              教材: r[fieldMap["教材"]] || "",
-              コース名: r[fieldMap["コース名"]] || "",
-              状態: r[fieldMap["状態"]] || "",
-            };
-          });
-          setData(parsed);
-        },
-      });
+      processCSV(target.result);
     };
     reader.readAsText(file, "utf-8");
   };
