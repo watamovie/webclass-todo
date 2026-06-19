@@ -137,26 +137,71 @@ a:hover {
   padding: var(--gap);
 }
 
-header {
+.app-header {
   margin-bottom: var(--gap);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-header h1 {
+.app-header h1 {
   font-size: clamp(1.5rem, 2vw + 1rem, 2rem);
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
+  margin: 0;
 }
 
-header img.logo {
+.app-header img.logo {
   width: 2.25rem;
   height: 2.25rem;
   flex-shrink: 0;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font: inherit;
+}
+
+.text-button:hover,
+.text-button:focus-visible {
+  background: var(--surface-hover);
+  text-decoration: none;
+}
+
+.text-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    padding: 0.5rem;
+  }
+  .nav-links {
+    gap: 0.25rem;
+  }
 }
 
 .sidebar {
@@ -175,7 +220,7 @@ header img.logo {
     grid-template-columns: var(--sidebar-width) 1fr;
     gap: var(--gap);
   }
-  header {
+  .app-header {
     grid-column: 1 / -1;
   }
   .container > input[type="file"],

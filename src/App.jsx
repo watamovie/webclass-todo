@@ -728,14 +728,23 @@ export default function App() {
   return (
     <>
       <div className="container">
-        <header>
-          <h1 onClick={clearFile} style={{ cursor: "pointer" }}>📋 WebClass To-Do</h1>
-          {/* ファイル解除ボタンはデータ読み込み後だけ表示 */}
-          {data.length > 0 && (
-            <button onClick={clearFile} style={{ marginLeft: "1rem" }}>
-              🚪 ファイル選択解除
-            </button>
-          )}
+        <header className="app-header">
+          <h1 onClick={clearFile}>📋 WebClass To-Do</h1>
+          <nav className="nav-links">
+            {data.length > 0 && (
+              <button onClick={clearFile} className="text-button">
+                ファイル解除
+              </button>
+            )}
+            <a
+              href="./usage.html"
+              target="_blank"
+              rel="noopener"
+              className="text-button"
+            >
+              使い方
+            </a>
+          </nav>
         </header>
         {!data.length && (
           <>
@@ -746,11 +755,6 @@ export default function App() {
               onChange={handleFile}
             />
             <p>課題実施状況一覧のCSVを選択してください。</p>
-            <p>
-              <a href="./usage.html" target="_blank" rel="noopener" className="button">
-                使い方を見る
-              </a>
-            </p>
           </>
         )}
         {data.length > 0 && (
